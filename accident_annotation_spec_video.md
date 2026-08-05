@@ -1,4 +1,4 @@
-# 交通事故视频素材结构化标注规范（v3）
+# 交通事故视频素材结构化标注规范（v4）
 
 > 目的：对路侧监控事故**视频**进行结构化、分场景的要素标注，
 > 覆盖所有与"事故是否发生"判断相关的要素，
@@ -7,9 +7,10 @@
 > 配套文档：图片数据标注见《accident_annotation_spec_image.md》；
 > 各要素判定标准见《accident_annotation_criteria.md》。
 >
-> v3 变更：JSON 按 **p0/p1/p2 优先级分组**组织——从 JSON 内容即可直观看出每个要素的
-> 优先级，训练数据生成脚本可直接按优先级层遍历字段。
-> （v2 变更保留：固定 JSON 结构；新增机动车侧翻/非机动车侧翻/机动车着火/事故区域字段。）
+> v4 变更：所有**时序属性**统一改为 `{value, timestamp_sec}` 对象；事件级新增
+> `collision_moment_sec`；时间戳单位为相对视频起点的秒，精度 0.1s。
+> （v3 变更保留：JSON 按 **p0/p1/p2 优先级分组**；固定 JSON 结构；
+> 机动车侧翻/非机动车侧翻/机动车着火/事故区域字段。）
 
 ---
 
@@ -17,18 +18,19 @@
 
 1. [设计原则](#1-设计原则)
 2. [标注优先级说明](#2-标注优先级说明)
-3. [固定 JSON 结构总览（按优先级分组）](#3-固定-json-结构总览按优先级分组)
-4. [元信息与环境字段](#4-元信息与环境字段)
-5. [交通流字段](#5-交通流字段)
-6. [场景要素字段（固定结构，按场景启用）](#6-场景要素字段固定结构按场景启用)
-7. [证据链字段](#7-证据链字段)
-8. [事件级字段（时间/区域/参与者）](#8-事件级字段时间区域参与者)
-9. [最终标签与派生字段](#9-最终标签与派生字段)
-10. [取值约定与一致性规则](#10-取值约定与一致性规则)
-11. [标注流程与质检](#11-标注流程与质检)
-12. [完整标注示例](#12-完整标注示例)
-13. [字段与训练任务的映射关系](#13-字段与训练任务的映射关系)
-14. [附录：枚举值字典](#14-附录枚举值字典)
+3. [时间戳标注约定（视频专用）](#3-时间戳标注约定视频专用)
+4. [固定 JSON 结构总览（按优先级分组）](#4-固定-json-结构总览按优先级分组)
+5. [元信息与环境字段](#5-元信息与环境字段)
+6. [交通流字段](#6-交通流字段)
+7. [场景要素字段（固定结构，按场景启用）](#7-场景要素字段固定结构按场景启用)
+8. [证据链字段](#8-证据链字段)
+9. [事件级字段（时间/区域/参与者）](#9-事件级字段时间区域参与者)
+10. [最终标签与派生字段](#10-最终标签与派生字段)
+11. [取值约定与一致性规则](#11-取值约定与一致性规则)
+12. [标注流程与质检](#12-标注流程与质检)
+13. [完整标注示例](#13-完整标注示例)
+14. [字段与训练任务的映射关系](#14-字段与训练任务的映射关系)
+15. [附录：枚举值字典](#15-附录枚举值字典)
 
 ---
 
@@ -40,8 +42,10 @@
 3. **优先级内嵌于结构**：每个语义块内部按 `p0 / p1 / p2` 子对象分组，
    JSON 本身即优先级清单，训练数据生成与完整性校验直接按层遍历；
 4. **证据与结论分离**：先标"看到了什么"（证据字段），再标"结论是什么"（事故标签）；
-5. **不确定性显式化**：看不清、判不了的要素统一标"不确定"，禁止猜测；
-6. **困难样本显式打标**：拥堵、双闪、near-miss、遮挡等易混淆样本自动派生 `hard` 标记。
+5. **时序属性必带时间戳**：凡描述"某一时刻发生/首次可确认"的属性，必须标注
+   `timestamp_sec`（见第 3 节）；状态/环境/结论类属性不加时间戳；
+6. **不确定性显式化**：看不清、判不了的要素统一标"不确定"，禁止猜测；
+7. **困难样本显式打标**：拥堵、双闪、near-miss、遮挡等易混淆样本自动派生 `hard` 标记。
 
 ---
 
@@ -72,20 +76,76 @@ for block in ["traffic", "scene_elements", "evidence", "event"]:
 
 ---
 
-## 3. 固定 JSON 结构总览（按优先级分组）
+## 3. 时间戳标注约定（视频专用）
+
+> 图片标注不适用本节（无时序）。视频中所有与"某一时刻发生/首次可确认"相关的属性，
+> **必须**携带时间戳；纯状态、环境、结论字段不加时间戳。
+
+### 3.1 时序属性取值对象
+
+时序属性统一使用对象，**禁止**再写成纯字符串：
+
+```json
+{"value": "是", "timestamp_sec": 6.5}
+```
+
+| 情况 | `value` | `timestamp_sec` |
+|---|---|---|
+| 确认观察到该现象/事件 | `是`（或该字段允许的肯定枚举） | **必填**：首次可确认出现的时刻 |
+| 确认未发生 / 无此现象 | `否` | `null` |
+| 看不清、判不了 | `不确定` | 有候选时刻可填，否则 `null` |
+| 场景不适用 | `不适用` | `null` |
+| 尚未到达标注层级 | `未标注` | `null` |
+
+### 3.2 时间戳度量
+
+| 约定 | 说明 |
+|---|---|
+| 原点 | 视频文件起点 = `0.0` |
+| 单位 | 秒（`sec`） |
+| 精度 | **0.1s**（十分之一秒）；工具可用帧号换算：`frame_idx / fps` |
+| 取值范围 | `0 ≤ timestamp_sec ≤ meta.duration_sec` |
+| 定位原则 | 标**首次可确认**该现象的时刻，不标峰值/最清晰帧（除非二者重合） |
+
+### 3.3 时序属性清单（必须用 `{value, timestamp_sec}`）
+
+| 所在块 | 字段 |
+|---|---|
+| `scene_elements.p1` | `hazard_light_chain`、`sudden_brake_wave`、`rear_end_chain`、`guardrail_impact`、`debris_on_road`、`smoke_in_view` |
+| `scene_elements.p2` | `merge_conflict`、`weaving_conflict`、`reverse_or_retrograde`、`turn_conflict`、`red_light_running`、`door_open_event` |
+| `evidence.p0` | `collision_visible`、`person_down`、`motor_vehicle_rollover`、`non_motor_rollover`、`vehicle_fire`、`abnormal_stop`、`bypass_behavior`、`hazard_light`、`smooth_pullover`、`near_miss` |
+| `evidence.p1` | `debris_scatter`、`abrupt_trajectory_change`、`people_exit_vehicle`、`close_distance_pass` |
+
+### 3.4 事件级纯时间字段（直接为 float，不加 value 包装）
+
+| 字段 | 优先级 | 说明 |
+|---|---|---|
+| `event.p0.event_start_sec` | P0 | 事件开始（碰撞或首个异常行为；负样本填 0） |
+| `event.p0.event_end_sec` | P0 | 事件结束（状态稳定；负样本填视频时长） |
+| `event.p1.collision_moment_sec` | P1 | 碰撞接触瞬间；无碰撞或不可见时填 `null` |
+
+### 3.5 不加时间戳的字段（状态 / 环境 / 结论）
+
+`traffic.*`、`env.*`、`label.*`、`occlusion_type`、`collision_occluded`、`congestion_only`、
+`hazard_light_reason`、`vehicle_deformation`、`posture_anomaly`、停车位置类、排队类、
+适用性锁定类、以及 `accident_area_*` / `participants` 结构字段等。
+
+---
+
+## 4. 固定 JSON 结构总览（按优先级分组）
 
 **每条视频输出一条 JSON，结构与字段集合固定不变**。每个语义块内部按优先级分组：
 
 ```json
 {
-  "meta":           { "...": "工具自动填，不分优先级，见第4节" },
+  "meta":           { "...": "工具自动填，不分优先级，见第5节" },
   "env":            { "p1": { }, "p2": { } },
   "traffic":        { "p0": { }, "p1": { } },
   "scene_elements": { "p1": { }, "p2": { } },
   "evidence":       { "p0": { }, "p1": { } },
   "event":          { "p0": { }, "p1": { }, "p2": { } },
   "label":          { "p0": { } },
-  "derived":        { "...": "脚本自动派生字段，见第9节" }
+  "derived":        { "...": "脚本自动派生字段，见第10节" }
 }
 ```
 
@@ -97,9 +157,9 @@ for block in ["traffic", "scene_elements", "evidence", "event"]:
 
 ---
 
-## 4. 元信息与环境字段
+## 5. 元信息与环境字段
 
-### 4.1 元信息 `meta`（工具自动填，无优先级分组）
+### 5.1 元信息 `meta`（工具自动填，无优先级分组）
 
 | 字段 | 类型 | 取值 | 说明 |
 |---|---|---|---|
@@ -113,7 +173,7 @@ for block in ["traffic", "scene_elements", "evidence", "event"]:
 > `scene` 虽放在 meta（因其决定其余字段适用性、且在分诊层就已确定），
 > 优先级视同 P0：任何样本必须有效。
 
-### 4.2 环境条件 `env`
+### 5.2 环境条件 `env`
 
 | 子对象 | 字段 | 取值 | 与事故判断的关系 |
 |---|---|---|---|
@@ -125,7 +185,7 @@ for block in ["traffic", "scene_elements", "evidence", "event"]:
 
 ---
 
-## 5. 交通流字段
+## 6. 交通流字段
 
 ### 交通流 `traffic`
 
@@ -136,59 +196,59 @@ for block in ["traffic", "scene_elements", "evidence", "event"]:
 | **p1** | `queue_present` | 是 / 否 | 是否排队 |
 | **p1** | `pedestrian_gathering` | 是 / 否 | 人员在车行道聚集（事故后常见） |
 
-> `congestion` 由 `traffic_flow` 自动派生，见第 9 节 `derived`。
+> `congestion` 由 `traffic_flow` 自动派生，见第 10 节 `derived`。
 
 ---
 
-## 6. 场景要素字段（固定结构，按场景启用）
+## 7. 场景要素字段（固定结构，按场景启用）
 
 `scene_elements` 是扁平固定字段块：以下所有字段在每条 JSON 中都存在，
 按 `p1 / p2` 分组；`scene` 不适用时该字段填 `不适用`（工具自动锁定）。
 
-### 6.1 p1 子对象（场景要素主力字段）
+### 7.1 p1 子对象（场景要素主力字段）
 
-| 字段 | 适用场景 | 取值 | 与事故判断的关系 |
+| 字段 | 适用场景 | 取值形式 | 与事故判断的关系 |
 |---|---|---|---|
-| `stop_position` | 全部场景 | 行车道 / 应急车道 / 路边 / 无停车 / 不适用 | "事故停车 vs 临停"核心判别点 |
-| `emergency_lane_occupied` | 高速高架、隧道 | 是 / 否 / 无应急车道 / 不适用 | 应急车道停车多为故障临停；行车道停车为强事故信号 |
-| `stop_in_lane` | 隧道、高速高架 | 是 / 否 / 不适用 | 隧道/高速行车道停车事故概率高 |
-| `queue_at_signal` | 城市路口 | 是 / 否 / 不适用 | **等灯静止 ≠ 事故**（路口最常见误报源） |
-| `hazard_light_chain` | 隧道、高速高架 | 是 / 否 / 不适用 | 多车依次开双闪提醒后车（**不是事故**） |
-| `sudden_brake_wave` | 高速高架、隧道 | 是 / 否 / 不适用 | 上游连锁急刹（事故前兆） |
-| `rear_end_chain` | 高速高架 | 是 / 否 / 不适用 | 多车追尾链 |
-| `vru_involved` | 城市路口、城市普通路段 | 行人 / 非机动车 / 两者 / 无 / 不适用 | 弱势交通参与者卷入 |
-| `guardrail_impact` | 高速高架、匝道收费站 | 是 / 否 / 不确定 / 不适用 | 撞护栏（单车事故常见形态） |
-| `debris_on_road` | 高速高架、隧道 | 是 / 否 / 不确定 / 不适用 | 路面抛洒物/碎片 |
-| `smoke_in_view` | 隧道 | 是 / 否 / 不确定 / 不适用 | 隧道烟雾（着火统一用 evidence.vehicle_fire） |
+| `stop_position` | 全部场景 | 纯枚举：行车道 / 应急车道 / 路边 / 无停车 / 不适用 | "事故停车 vs 临停"核心判别点 |
+| `emergency_lane_occupied` | 高速高架、隧道 | 纯枚举：是 / 否 / 无应急车道 / 不适用 | 应急车道停车多为故障临停；行车道停车为强事故信号 |
+| `stop_in_lane` | 隧道、高速高架 | 纯枚举：是 / 否 / 不适用 | 隧道/高速行车道停车事故概率高 |
+| `queue_at_signal` | 城市路口 | 纯枚举：是 / 否 / 不适用 | **等灯静止 ≠ 事故**（路口最常见误报源） |
+| `hazard_light_chain` | 隧道、高速高架 | **时序对象** `{value, timestamp_sec}`；value=是/否/不适用 | 多车依次开双闪提醒后车（**不是事故**）；timestamp=首辆开双闪时刻 |
+| `sudden_brake_wave` | 高速高架、隧道 | **时序对象**；value=是/否/不适用 | 上游连锁急刹（事故前兆）；timestamp=首辆急刹时刻 |
+| `rear_end_chain` | 高速高架 | **时序对象**；value=是/否/不适用 | 多车追尾链；timestamp=首次追尾接触时刻 |
+| `vru_involved` | 城市路口、城市普通路段 | 纯枚举：行人 / 非机动车 / 两者 / 无 / 不适用 | 弱势交通参与者卷入 |
+| `guardrail_impact` | 高速高架、匝道收费站 | **时序对象**；value=是/否/不确定/不适用 | 撞护栏；timestamp=撞击时刻 |
+| `debris_on_road` | 高速高架、隧道 | **时序对象**；value=是/否/不确定/不适用 | 路面抛洒物/碎片；timestamp=首次可确认出现时刻 |
+| `smoke_in_view` | 隧道 | **时序对象**；value=是/否/不确定/不适用 | 隧道烟雾（着火统一用 evidence.vehicle_fire）；timestamp=烟雾首次可见时刻 |
 
-### 6.2 p2 子对象（场景要素次要字段）
+### 7.2 p2 子对象（场景要素次要字段）
 
-| 字段 | 适用场景 | 取值 |
+| 字段 | 适用场景 | 取值形式 |
 |---|---|---|
-| `roadside_parking_present` | 城市普通路段 | 是 / 否 / 不适用 |
-| `double_parked` | 城市普通路段 | 是 / 否 / 不适用 |
-| `bus_stop_area` | 城市普通路段 | 是 / 否 / 不适用 |
-| `toll_queue` | 匝道收费站 | 是 / 否 / 不适用 |
-| `merge_conflict` | 高速高架、匝道收费站 | 是 / 否 / 不适用 |
-| `weaving_conflict` | 匝道收费站 | 是 / 否 / 不适用 |
-| `reverse_or_retrograde` | 高速高架、隧道 | 是 / 否 / 不适用 |
-| `intersection_blocked` | 城市路口 | 是 / 否 / 不适用 |
-| `turn_conflict` | 城市路口 | 是 / 否 / 不适用 |
-| `red_light_running` | 城市路口 | 是 / 否 / 不确定 / 不适用 |
-| `signal_state_at_event` | 城市路口 | 红 / 绿 / 黄 / 闪烁 / 不可见 / 不适用 |
-| `crosswalk_area` | 城市路口、城市普通路段 | 是 / 否 / 不适用 |
-| `pedestrian_crossing_midblock` | 城市普通路段 | 是 / 否 / 不适用 |
-| `delivery_rider_involved` | 城市路口、城市普通路段 | 是 / 否 / 不适用 |
-| `door_open_event` | 城市普通路段 | 是 / 否 / 不确定 / 不适用 |
-| `truck_involved` | 全部场景 | 是 / 否 |
-| `construction_zone` | 全部场景 | 是 / 否 |
-| `tunnel_zone` | 隧道 | 入口段 / 中段 / 出口段 / 不适用 |
-| `lighting_transition_artifact` | 隧道 | 是 / 否 / 不适用 |
-| `narrow_shoulder` | 隧道 | 有硬路肩 / 无硬路肩 / 不适用 |
-| `sharp_curve_area` | 匝道收费站 | 是 / 否 / 不适用 |
-| `ramp_type` | 匝道收费站 | 上匝道 / 下匝道 / 收费站广场 / 不确定 / 不适用 |
+| `roadside_parking_present` | 城市普通路段 | 纯枚举：是 / 否 / 不适用 |
+| `double_parked` | 城市普通路段 | 纯枚举：是 / 否 / 不适用 |
+| `bus_stop_area` | 城市普通路段 | 纯枚举：是 / 否 / 不适用 |
+| `toll_queue` | 匝道收费站 | 纯枚举：是 / 否 / 不适用 |
+| `merge_conflict` | 高速高架、匝道收费站 | **时序对象**；value=是/否/不适用 |
+| `weaving_conflict` | 匝道收费站 | **时序对象**；value=是/否/不适用 |
+| `reverse_or_retrograde` | 高速高架、隧道 | **时序对象**；value=是/否/不适用 |
+| `intersection_blocked` | 城市路口 | 纯枚举：是 / 否 / 不适用 |
+| `turn_conflict` | 城市路口 | **时序对象**；value=是/否/不适用 |
+| `red_light_running` | 城市路口 | **时序对象**；value=是/否/不确定/不适用 |
+| `signal_state_at_event` | 城市路口 | 纯枚举：红 / 绿 / 黄 / 闪烁 / 不可见 / 不适用（取事件开始时刻的灯态） |
+| `crosswalk_area` | 城市路口、城市普通路段 | 纯枚举：是 / 否 / 不适用 |
+| `pedestrian_crossing_midblock` | 城市普通路段 | 纯枚举：是 / 否 / 不适用 |
+| `delivery_rider_involved` | 城市路口、城市普通路段 | 纯枚举：是 / 否 / 不适用 |
+| `door_open_event` | 城市普通路段 | **时序对象**；value=是/否/不确定/不适用 |
+| `truck_involved` | 全部场景 | 纯枚举：是 / 否 |
+| `construction_zone` | 全部场景 | 纯枚举：是 / 否 |
+| `tunnel_zone` | 隧道 | 纯枚举：入口段 / 中段 / 出口段 / 不适用 |
+| `lighting_transition_artifact` | 隧道 | 纯枚举：是 / 否 / 不适用 |
+| `narrow_shoulder` | 隧道 | 纯枚举：有硬路肩 / 无硬路肩 / 不适用 |
+| `sharp_curve_area` | 匝道收费站 | 纯枚举：是 / 否 / 不适用 |
+| `ramp_type` | 匝道收费站 | 纯枚举：上匝道 / 下匝道 / 收费站广场 / 不确定 / 不适用 |
 
-### 6.3 场景适用性矩阵（工具自动锁定的依据）
+### 7.3 场景适用性矩阵（工具自动锁定的依据）
 
 | 字段 → 场景 | 高速高架 | 城市路口 | 城市普通路段 | 隧道 | 匝道收费站 |
 |---|---|---|---|---|---|
@@ -208,58 +268,61 @@ for block in ["traffic", "scene_elements", "evidence", "event"]:
 
 ---
 
-## 7. 证据链字段
+## 8. 证据链字段
 
-### 7.1 p0 子对象（事故判定核心证据）
+> 下列标注为「时序对象」的字段格式见第 3 节：`{"value": "...", "timestamp_sec": ...}`。
+> 规则与准入判断时，对时序字段一律读其 `.value`。
 
-**直接证据：**
+### 8.1 p0 子对象（事故判定核心证据）
 
-| 字段 | 取值 | 说明 |
+**直接证据（均为时序对象）：**
+
+| 字段 | value 取值 | timestamp 含义 |
 |---|---|---|
-| `collision_visible` | 是 / 否 / 不确定 | 碰撞/剐蹭/撞击过程可直接看到 |
-| `person_down` | 是 / 否 / 不确定 | 行人/骑车人倒地（**即"行人倒地"要素**） |
-| `motor_vehicle_rollover` | 是 / 否 / 不确定 | **机动车侧翻**/翻滚 |
-| `non_motor_rollover` | 是 / 否 / 不确定 | **非机动车侧翻**（电动车/自行车/摩托车） |
-| `vehicle_fire` | 是 / 否 / 不确定 | **机动车着火**：明火/浓烟从车辆冒出（全场景通用） |
+| `collision_visible` | 是 / 否 / 不确定 | 碰撞/剐蹭/撞击过程首次可确认时刻 |
+| `person_down` | 是 / 否 / 不确定 | 行人/骑车人倒地首次可确认时刻 |
+| `motor_vehicle_rollover` | 是 / 否 / 不确定 | 机动车侧翻/翻滚首次可确认时刻 |
+| `non_motor_rollover` | 是 / 否 / 不确定 | 非机动车侧翻首次可确认时刻 |
+| `vehicle_fire` | 是 / 否 / 不确定 | 明火/浓烟从车辆冒出首次可确认时刻 |
 
 **间接证据核心：**
 
-| 字段 | 取值 | 说明 |
+| 字段 | 取值形式 | 说明 |
 |---|---|---|
-| `collision_occluded` | 是 / 否 | 碰撞点被遮挡（与 collision_visible 互斥为"是"） |
-| `abnormal_stop` | 是 / 否 / 不确定 | 异常停止（行车道中间/斜停/横跨车道） |
-| `bypass_behavior` | 是 / 否 / 不确定 | 周围车辆绕行固定区域 |
+| `collision_occluded` | 纯枚举：是 / 否 | 碰撞点被遮挡（与 collision_visible.value="是" 互斥）；状态字段，无时间戳 |
+| `abnormal_stop` | **时序对象**；value=是/否/不确定 | 异常停止；timestamp=车辆首次完全静止于异常位置的时刻 |
+| `bypass_behavior` | **时序对象**；value=是/否/不确定 | 周围车辆绕行；timestamp=首辆绕行车开始绕行时刻 |
 
 **误报判别要素：**
 
-| 字段 | 取值 | 说明 |
+| 字段 | 取值形式 | 说明 |
 |---|---|---|
-| `hazard_light` | 是 / 否 / 不确定 | 双闪（须逐帧确认闪烁） |
-| `hazard_light_reason` | 事故后 / 拥堵缓行 / 临时停车 / 故障施工 / 无双闪 / 不明确 | 双闪原因 |
-| `congestion_only` | 是 / 否 | 仅拥堵、无任何碰撞证据 |
-| `smooth_pullover` | 是 / 否 / 不确定 | 平稳减速靠边（临停特征） |
-| `near_miss` | 是 / 否 | 险情但未碰撞（急刹/擦肩） |
+| `hazard_light` | **时序对象**；value=是/否/不确定 | 双闪（须逐帧确认闪烁）；timestamp=双闪首次可确认闪烁时刻 |
+| `hazard_light_reason` | 纯枚举：事故后 / 拥堵缓行 / 临时停车 / 故障施工 / 无双闪 / 不明确 | 双闪原因（结论类，无时间戳） |
+| `congestion_only` | 纯枚举：是 / 否 | 仅拥堵、无任何碰撞证据（结论类） |
+| `smooth_pullover` | **时序对象**；value=是/否/不确定 | 平稳减速靠边；timestamp=开始明显靠边减速时刻 |
+| `near_miss` | **时序对象**；value=是 / 否 | 险情但未碰撞；timestamp=最近接/最险瞬间 |
 
-### 7.2 p1 子对象（证据链补全）
+### 8.2 p1 子对象（证据链补全）
 
-| 字段 | 取值 | 说明 |
+| 字段 | 取值形式 | 说明 |
 |---|---|---|
-| `vehicle_deformation` | 是 / 否 / 不确定 | 车损可见（远景一律"不确定"，不标"否"） |
-| `debris_scatter` | 是 / 否 / 不确定 | 事件前后路面新出现碎片/散落物 |
-| `occlusion_type` | 无遮挡 / 事故车自身遮挡 / 其他车辆遮挡 / 设施遮挡 / 画面边缘盲区 | 遮挡类型 |
-| `abrupt_trajectory_change` | 是 / 否 / 不确定 | 轨迹突变（急偏转/旋转/弹开） |
-| `posture_anomaly` | 是 / 否 / 不确定 | 停止后姿态歪斜/位置异常 |
-| `people_exit_vehicle` | 是 / 否 | 人员下车查看/聚集 |
-| `close_distance_pass` | 是 / 否 | 近距离通过但无接触 |
+| `vehicle_deformation` | 纯枚举：是 / 否 / 不确定 | 车损可见（远景一律"不确定"，不标"否"；状态类） |
+| `debris_scatter` | **时序对象**；value=是/否/不确定 | 事件前后路面新出现碎片；timestamp=碎片首次可确认时刻 |
+| `occlusion_type` | 纯枚举：无遮挡 / 事故车自身遮挡 / 其他车辆遮挡 / 设施遮挡 / 画面边缘盲区 | 遮挡类型（状态类） |
+| `abrupt_trajectory_change` | **时序对象**；value=是/否/不确定 | 轨迹突变；timestamp=突变起始时刻 |
+| `posture_anomaly` | 纯枚举：是 / 否 / 不确定 | 停止后姿态歪斜/位置异常（状态类） |
+| `people_exit_vehicle` | **时序对象**；value=是 / 否 | 人员下车查看/聚集；timestamp=首人下车时刻 |
+| `close_distance_pass` | **时序对象**；value=是 / 否 | 近距离通过但无接触；timestamp=最近接时刻 |
 
 ---
 
-## 8. 事件级字段（时间/区域/参与者)
+## 9. 事件级字段（时间/区域/参与者)
 
 > `event` 块结构固定。负样本中：p0 时间字段填 0/时长，`accident_area` 各字段填
-> null/不适用，`participants` 为空数组。
+> null/不适用，`participants` 为空数组，`collision_moment_sec` 填 `null`。
 
-### 8.1 p0 子对象（正样本必标）
+### 9.1 p0 子对象（正样本必标）
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
@@ -271,22 +334,26 @@ for block in ["traffic", "scene_elements", "evidence", "event"]:
 > `accident_area_box` 与参与者 `roi_box` 的区别：前者是**事件级**整体事故区域
 > （事故定位/grounding/ROI 视频裁剪用）；后者是**单个参与者**的活动区域框。
 
-### 8.2 p1 子对象
+### 9.2 p1 子对象
 
 | 字段 | 类型/取值 | 说明 |
 |---|---|---|
 | `collision_moment_visible` | 是 / 否 / 无碰撞 | 碰撞瞬间是否可见 |
+| `collision_moment_sec` | float 或 null | **碰撞接触瞬间时间戳**；`collision_moment_visible=是` 时必填；无碰撞或不可见填 `null` |
 | `pre_event_visible` | 是 / 否 | 事件前正常状态可见 |
 | `post_event_visible` | 是 / 否 | 事件后状态可见 |
-| `participants` | array | 参与者列表（结构见 8.4；负样本为空数组） |
+| `participants` | array | 参与者列表（结构见 9.4；负样本为空数组） |
 
-### 8.3 p2 子对象
+> 一致性：`collision_visible.value=是` 时，通常 `collision_moment_sec` 应等于或接近
+> `collision_visible.timestamp_sec`，且落在 `[event_start_sec, event_end_sec]` 内。
+
+### 9.3 p2 子对象
 
 | 字段 | 取值 | 说明 |
 |---|---|---|
 | `area_occluded_ratio` | 无遮挡 / 部分遮挡 / 大部遮挡 / 不适用 | 事故区域被遮挡程度 |
 
-### 8.4 参与者对象结构（`event.p1.participants[]`）
+### 9.4 参与者对象结构（`event.p1.participants[]`）
 
 | 字段 | 优先级性质 | 取值 |
 |---|---|---|
@@ -299,95 +366,106 @@ for block in ["traffic", "scene_elements", "evidence", "event"]:
 
 ---
 
-## 9. 最终标签与派生字段
+## 10. 最终标签与派生字段
 
-### 9.1 最终标签 `label`（全部 p0）
+### 10.1 最终标签 `label`（全部 p0）
 
 | 字段 | 取值 | 说明 |
 |---|---|---|
-| `accident` | 是 / 否 / 不确定 | 最终事故标签（准入规则见 10.2；"不确定"不入训练集） |
+| `accident` | 是 / 否 / 不确定 | 最终事故标签（准入规则见 11.2；"不确定"不入训练集） |
 | `accident_type` | 无事故 / 追尾 / 侧碰 / 剐蹭 / 正面碰撞 / 撞行人非机动车 / 侧翻 / 撞固定物 / 多车连环 / 起火燃烧 / 不确定 | 事故类型 |
 | `confidence` | 高 / 中 / 低 | 标注员对结论的信心 |
 
-### 9.2 派生字段 `derived`（脚本自动计算，人工不填）
+### 10.2 派生字段 `derived`（脚本自动计算，人工不填）
 
 | 字段 | 派生规则 |
 |---|---|
 | `congestion` | traffic_flow ∈ {拥堵, 停止排队} → 是；{畅通, 缓行} → 否；某点中断 → 按上游状态 |
-| `hard` | 见 10.3 困难样本派生规则 |
+| `hard` | 见 11.3 困难样本派生规则 |
 | `event_stage_coverage` | 由 collision_moment_visible / pre_event_visible / post_event_visible 组合派生：全过程 / 仅前+后 / 仅后 / 仅前 / 不适用 |
 
 ---
 
-## 10. 取值约定与一致性规则
+## 11. 取值约定与一致性规则
 
-### 10.1 取值约定
+### 11.1 取值约定
 
 1. 所有布尔类字段只允许：**是 / 否 / 不确定**（部分字段额外允许"不适用/无/不可见"，见各表）；
-2. **`不适用`** 只能出现在场景要素与事件级字段中，且必须与适用性矩阵一致（工具锁定）；
-3. **`未标注`** 是分层占位值：仅允许出现在尚未到达标注层级的 p1/p2 字段中，
+2. **时序属性**必须为 `{value, timestamp_sec}` 对象（见第 3 节），禁止写成纯字符串；
+3. **`不适用`** 只能出现在场景要素与事件级字段中，且必须与适用性矩阵一致（工具锁定）；
+4. **`未标注`** 是分层占位值：仅允许出现在尚未到达标注层级的 p1/p2 字段中，
    p0 字段在细标样本中不得为"未标注"；
-4. "不确定"的使用标准：正常速度播放 + 逐帧回看后仍无法判断。
+5. "不确定"的使用标准：正常速度播放 + 逐帧回看后仍无法判断。
 
-### 10.2 事故正样本准入规则
+### 11.2 事故正样本准入规则
 
-`accident=是` 必须满足以下之一：
+`accident=是` 必须满足以下之一（时序字段读 `.value`）：
 
 ```text
-① collision_visible = 是（碰撞过程可见）
-② collision_occluded = 是，且以下间接证据 ≥ 2 项为"是"：
+① collision_visible.value = 是（碰撞过程可见）
+② collision_occluded = 是，且以下间接证据 ≥ 2 项 value="是"：
    abnormal_stop / abrupt_trajectory_change / posture_anomaly /
    bypass_behavior / flow_interruption_point / people_exit_vehicle
-③ 事故后强证据任一为"是"：
+③ 事故后强证据任一 value="是"：
    person_down / motor_vehicle_rollover / non_motor_rollover /
-   vehicle_fire / vehicle_deformation
+   vehicle_fire ；或 vehicle_deformation = 是
 ```
 
 不满足准入规则的疑似事故 → `accident=不确定`，不进训练集，单独归档。
 
-### 10.3 困难样本自动派生规则（`derived.hard = true` 条件）
+### 11.3 困难样本自动派生规则（`derived.hard = true` 条件）
 
 ```text
 正样本困难：
-  collision_visible=否 且 accident=是
+  collision_visible.value=否 且 accident=是
   event_stage_coverage ∈ {仅后, 仅前+后}
   area_occluded_ratio ∈ {部分遮挡, 大部遮挡}
 
 负样本困难：
   congestion_only=是
-  hazard_light=是 且 accident=否
-  near_miss=是 或 close_distance_pass=是
-  abnormal_stop=是 且 accident=否
-  hazard_light_chain=是
+  hazard_light.value=是 且 accident=否
+  near_miss.value=是 或 close_distance_pass.value=是
+  abnormal_stop.value=是 且 accident=否
+  hazard_light_chain.value=是
   queue_at_signal=是
 ```
 
-### 10.4 结构与完整性校验（脚本自动执行）
+### 11.4 结构与完整性校验（脚本自动执行）
 
 ```text
 ① 结构校验：JSON 必须包含全部块及其 p0/p1/p2 子对象，字段集合与本规范完全一致；
 ② 优先级校验：细标样本所有 p0 字段 ≠ 未标注；标准标注样本 p0+p1 字段 ≠ 未标注；
-③ 适用性校验：scene 不适用的场景要素字段必须为"不适用"，适用的不得为"不适用"；
-④ 互斥校验：collision_visible=是 与 collision_occluded=是 不得同时成立；
-⑤ 正样本校验：accident=是 时准入规则必须满足，且 event.p0 四字段必须有效。
+③ 适用性校验：scene 不适用的场景要素字段必须为"不适用"（时序对象则 value="不适用"），
+   适用的不得为"不适用"；
+④ 互斥校验：collision_visible.value=是 与 collision_occluded=是 不得同时成立；
+⑤ 正样本校验：accident=是 时准入规则必须满足，且 event.p0 四字段必须有效；
+⑥ 时间戳校验（视频专用）：
+   - 第 3.3 节清单中的时序属性：value∈{是} 或肯定枚举时，timestamp_sec 必为数字且
+     0 ≤ timestamp_sec ≤ duration_sec；value∈{否,不适用,未标注} 时 timestamp_sec 必须为 null；
+   - event_start_sec ≤ event_end_sec；正样本时间窗落在 [0, duration_sec]；
+   - collision_moment_visible=是 时 collision_moment_sec 必填且落在
+     [event_start_sec, event_end_sec]；=无碰撞/否 时 collision_moment_sec 必须为 null；
+   - 时序属性 timestamp（当非 null）建议落在 [event_start_sec, event_end_sec]±2s 内
+     （预警类如 sudden_brake_wave 可早于 start）。
 ```
 
 ---
 
-## 11. 标注流程与质检
+## 12. 标注流程与质检
 
-### 11.1 标注流程（与 JSON 优先级分组一一对应）
+### 12.1 标注流程（与 JSON 优先级分组一一对应）
 
 ```text
 第 1 步（分诊，~15秒）  ：meta.scene + label 初判 + 是否值得细标
-第 2 步（p0 层标注）    ：traffic.p0 → evidence.p0 → label.p0
+第 2 步（p0 层标注）    ：traffic.p0 → evidence.p0（含时序时间戳）→ label.p0
                           （正样本补 event.p0：时间起止 + 事故区域）
 第 3 步（p1 层标注）    ：env.p1 → scene_elements.p1 → evidence.p1 → event.p1
+                          （含 collision_moment_sec 与时序属性时间戳）
 第 4 步（p2 层标注）    ：各块 p2（人力允许时）
 第 5 步（自动处理）     ：derived 派生 + 结构/完整性校验
 ```
 
-### 11.2 质检要求
+### 12.2 质检要求
 
 | 项目 | 要求 |
 |---|---|
@@ -399,7 +477,7 @@ for block in ["traffic", "scene_elements", "evidence", "event"]:
 
 ---
 
-## 12. 完整标注示例
+## 13. 完整标注示例
 
 ### 示例 1：高速追尾事故（正样本，碰撞可见）
 
@@ -414,12 +492,25 @@ for block in ["traffic", "scene_elements", "evidence", "event"]:
     "annotator_id": "A03"
   },
   "env": {
-    "p1": { "lighting": "白天", "visibility": "中" },
-    "p2": { "weather": "雨", "road_surface": "湿滑", "glare_or_reflection": "否" }
+    "p1": {
+      "lighting": "白天",
+      "visibility": "中"
+    },
+    "p2": {
+      "weather": "雨",
+      "road_surface": "湿滑",
+      "glare_or_reflection": "否"
+    }
   },
   "traffic": {
-    "p0": { "traffic_flow": "某点中断", "flow_interruption_point": "是" },
-    "p1": { "queue_present": "是", "pedestrian_gathering": "否" }
+    "p0": {
+      "traffic_flow": "某点中断",
+      "flow_interruption_point": "是"
+    },
+    "p1": {
+      "queue_present": "是",
+      "pedestrian_gathering": "否"
+    }
   },
   "scene_elements": {
     "p1": {
@@ -427,30 +518,66 @@ for block in ["traffic", "scene_elements", "evidence", "event"]:
       "emergency_lane_occupied": "否",
       "stop_in_lane": "是",
       "queue_at_signal": "不适用",
-      "hazard_light_chain": "否",
-      "sudden_brake_wave": "是",
-      "rear_end_chain": "是",
+      "hazard_light_chain": {
+        "value": "否",
+        "timestamp_sec": null
+      },
+      "sudden_brake_wave": {
+        "value": "是",
+        "timestamp_sec": 5.8
+      },
+      "rear_end_chain": {
+        "value": "是",
+        "timestamp_sec": 6.5
+      },
       "vru_involved": "不适用",
-      "guardrail_impact": "否",
-      "debris_on_road": "是",
-      "smoke_in_view": "不适用"
+      "guardrail_impact": {
+        "value": "否",
+        "timestamp_sec": null
+      },
+      "debris_on_road": {
+        "value": "是",
+        "timestamp_sec": 6.8
+      },
+      "smoke_in_view": {
+        "value": "不适用",
+        "timestamp_sec": null
+      }
     },
     "p2": {
       "roadside_parking_present": "不适用",
       "double_parked": "不适用",
       "bus_stop_area": "不适用",
       "toll_queue": "不适用",
-      "merge_conflict": "否",
-      "weaving_conflict": "不适用",
-      "reverse_or_retrograde": "否",
+      "merge_conflict": {
+        "value": "否",
+        "timestamp_sec": null
+      },
+      "weaving_conflict": {
+        "value": "不适用",
+        "timestamp_sec": null
+      },
+      "reverse_or_retrograde": {
+        "value": "否",
+        "timestamp_sec": null
+      },
       "intersection_blocked": "不适用",
-      "turn_conflict": "不适用",
-      "red_light_running": "不适用",
+      "turn_conflict": {
+        "value": "不适用",
+        "timestamp_sec": null
+      },
+      "red_light_running": {
+        "value": "不适用",
+        "timestamp_sec": null
+      },
       "signal_state_at_event": "不适用",
       "crosswalk_area": "不适用",
       "pedestrian_crossing_midblock": "不适用",
       "delivery_rider_involved": "不适用",
-      "door_open_event": "不适用",
+      "door_open_event": {
+        "value": "不适用",
+        "timestamp_sec": null
+      },
       "truck_involved": "是",
       "construction_zone": "否",
       "tunnel_zone": "不适用",
@@ -462,39 +589,87 @@ for block in ["traffic", "scene_elements", "evidence", "event"]:
   },
   "evidence": {
     "p0": {
-      "collision_visible": "是",
-      "person_down": "否",
-      "motor_vehicle_rollover": "否",
-      "non_motor_rollover": "否",
-      "vehicle_fire": "否",
+      "collision_visible": {
+        "value": "是",
+        "timestamp_sec": 6.5
+      },
+      "person_down": {
+        "value": "否",
+        "timestamp_sec": null
+      },
+      "motor_vehicle_rollover": {
+        "value": "否",
+        "timestamp_sec": null
+      },
+      "non_motor_rollover": {
+        "value": "否",
+        "timestamp_sec": null
+      },
+      "vehicle_fire": {
+        "value": "否",
+        "timestamp_sec": null
+      },
       "collision_occluded": "否",
-      "abnormal_stop": "是",
-      "bypass_behavior": "是",
-      "hazard_light": "是",
+      "abnormal_stop": {
+        "value": "是",
+        "timestamp_sec": 7.2
+      },
+      "bypass_behavior": {
+        "value": "是",
+        "timestamp_sec": 8.0
+      },
+      "hazard_light": {
+        "value": "是",
+        "timestamp_sec": 7.5
+      },
       "hazard_light_reason": "事故后",
       "congestion_only": "否",
-      "smooth_pullover": "否",
-      "near_miss": "否"
+      "smooth_pullover": {
+        "value": "否",
+        "timestamp_sec": null
+      },
+      "near_miss": {
+        "value": "否",
+        "timestamp_sec": null
+      }
     },
     "p1": {
       "vehicle_deformation": "是",
-      "debris_scatter": "是",
+      "debris_scatter": {
+        "value": "是",
+        "timestamp_sec": 6.8
+      },
       "occlusion_type": "无遮挡",
-      "abrupt_trajectory_change": "是",
+      "abrupt_trajectory_change": {
+        "value": "是",
+        "timestamp_sec": 6.5
+      },
       "posture_anomaly": "是",
-      "people_exit_vehicle": "否",
-      "close_distance_pass": "否"
+      "people_exit_vehicle": {
+        "value": "否",
+        "timestamp_sec": null
+      },
+      "close_distance_pass": {
+        "value": "否",
+        "timestamp_sec": null
+      }
     }
   },
   "event": {
     "p0": {
       "event_start_sec": 6.5,
       "event_end_sec": 14.0,
-      "accident_area_box": [760, 320, 520, 340],
+      "accident_area_box": [
+        760,
+        320,
+        520,
+        340
+      ],
       "accident_area_location": "行车道内"
     },
     "p1": {
       "collision_moment_visible": "是",
+      "collision_moment_sec": 6.5,
       "pre_event_visible": "是",
       "post_event_visible": "是",
       "participants": [
@@ -504,7 +679,12 @@ for block in ["traffic", "scene_elements", "evidence", "event"]:
           "behavior_before": "急刹",
           "state_after": "停止行车道",
           "hazard_light_after": "是",
-          "roi_box": [820, 340, 420, 300]
+          "roi_box": [
+            820,
+            340,
+            420,
+            300
+          ]
         },
         {
           "type": "轿车",
@@ -512,14 +692,25 @@ for block in ["traffic", "scene_elements", "evidence", "event"]:
           "behavior_before": "正常行驶",
           "state_after": "姿态歪斜",
           "hazard_light_after": "不可见",
-          "roi_box": [780, 380, 300, 240]
+          "roi_box": [
+            780,
+            380,
+            300,
+            240
+          ]
         }
       ]
     },
-    "p2": { "area_occluded_ratio": "无遮挡" }
+    "p2": {
+      "area_occluded_ratio": "无遮挡"
+    }
   },
   "label": {
-    "p0": { "accident": "是", "accident_type": "追尾", "confidence": "高" }
+    "p0": {
+      "accident": "是",
+      "accident_type": "追尾",
+      "confidence": "高"
+    }
   },
   "derived": {
     "congestion": "是",
@@ -542,12 +733,25 @@ for block in ["traffic", "scene_elements", "evidence", "event"]:
     "annotator_id": "A07"
   },
   "env": {
-    "p1": { "lighting": "隧道暗光", "visibility": "中" },
-    "p2": { "weather": "未标注", "road_surface": "未标注", "glare_or_reflection": "未标注" }
+    "p1": {
+      "lighting": "隧道暗光",
+      "visibility": "中"
+    },
+    "p2": {
+      "weather": "未标注",
+      "road_surface": "未标注",
+      "glare_or_reflection": "未标注"
+    }
   },
   "traffic": {
-    "p0": { "traffic_flow": "拥堵", "flow_interruption_point": "否" },
-    "p1": { "queue_present": "是", "pedestrian_gathering": "否" }
+    "p0": {
+      "traffic_flow": "拥堵",
+      "flow_interruption_point": "否"
+    },
+    "p1": {
+      "queue_present": "是",
+      "pedestrian_gathering": "否"
+    }
   },
   "scene_elements": {
     "p1": {
@@ -555,30 +759,66 @@ for block in ["traffic", "scene_elements", "evidence", "event"]:
       "emergency_lane_occupied": "无应急车道",
       "stop_in_lane": "否",
       "queue_at_signal": "不适用",
-      "hazard_light_chain": "是",
-      "sudden_brake_wave": "否",
-      "rear_end_chain": "不适用",
+      "hazard_light_chain": {
+        "value": "是",
+        "timestamp_sec": 3.0
+      },
+      "sudden_brake_wave": {
+        "value": "否",
+        "timestamp_sec": null
+      },
+      "rear_end_chain": {
+        "value": "不适用",
+        "timestamp_sec": null
+      },
       "vru_involved": "不适用",
-      "guardrail_impact": "不适用",
-      "debris_on_road": "否",
-      "smoke_in_view": "否"
+      "guardrail_impact": {
+        "value": "不适用",
+        "timestamp_sec": null
+      },
+      "debris_on_road": {
+        "value": "否",
+        "timestamp_sec": null
+      },
+      "smoke_in_view": {
+        "value": "否",
+        "timestamp_sec": null
+      }
     },
     "p2": {
       "roadside_parking_present": "不适用",
       "double_parked": "不适用",
       "bus_stop_area": "不适用",
       "toll_queue": "不适用",
-      "merge_conflict": "不适用",
-      "weaving_conflict": "不适用",
-      "reverse_or_retrograde": "未标注",
+      "merge_conflict": {
+        "value": "不适用",
+        "timestamp_sec": null
+      },
+      "weaving_conflict": {
+        "value": "不适用",
+        "timestamp_sec": null
+      },
+      "reverse_or_retrograde": {
+        "value": "未标注",
+        "timestamp_sec": null
+      },
       "intersection_blocked": "不适用",
-      "turn_conflict": "不适用",
-      "red_light_running": "不适用",
+      "turn_conflict": {
+        "value": "不适用",
+        "timestamp_sec": null
+      },
+      "red_light_running": {
+        "value": "不适用",
+        "timestamp_sec": null
+      },
       "signal_state_at_event": "不适用",
       "crosswalk_area": "不适用",
       "pedestrian_crossing_midblock": "不适用",
       "delivery_rider_involved": "不适用",
-      "door_open_event": "不适用",
+      "door_open_event": {
+        "value": "不适用",
+        "timestamp_sec": null
+      },
       "truck_involved": "未标注",
       "construction_zone": "未标注",
       "tunnel_zone": "未标注",
@@ -590,28 +830,70 @@ for block in ["traffic", "scene_elements", "evidence", "event"]:
   },
   "evidence": {
     "p0": {
-      "collision_visible": "否",
-      "person_down": "否",
-      "motor_vehicle_rollover": "否",
-      "non_motor_rollover": "否",
-      "vehicle_fire": "否",
+      "collision_visible": {
+        "value": "否",
+        "timestamp_sec": null
+      },
+      "person_down": {
+        "value": "否",
+        "timestamp_sec": null
+      },
+      "motor_vehicle_rollover": {
+        "value": "否",
+        "timestamp_sec": null
+      },
+      "non_motor_rollover": {
+        "value": "否",
+        "timestamp_sec": null
+      },
+      "vehicle_fire": {
+        "value": "否",
+        "timestamp_sec": null
+      },
       "collision_occluded": "否",
-      "abnormal_stop": "否",
-      "bypass_behavior": "否",
-      "hazard_light": "是",
+      "abnormal_stop": {
+        "value": "否",
+        "timestamp_sec": null
+      },
+      "bypass_behavior": {
+        "value": "否",
+        "timestamp_sec": null
+      },
+      "hazard_light": {
+        "value": "是",
+        "timestamp_sec": 3.0
+      },
       "hazard_light_reason": "拥堵缓行",
       "congestion_only": "是",
-      "smooth_pullover": "否",
-      "near_miss": "否"
+      "smooth_pullover": {
+        "value": "否",
+        "timestamp_sec": null
+      },
+      "near_miss": {
+        "value": "否",
+        "timestamp_sec": null
+      }
     },
     "p1": {
       "vehicle_deformation": "否",
-      "debris_scatter": "否",
+      "debris_scatter": {
+        "value": "否",
+        "timestamp_sec": null
+      },
       "occlusion_type": "无遮挡",
-      "abrupt_trajectory_change": "否",
+      "abrupt_trajectory_change": {
+        "value": "否",
+        "timestamp_sec": null
+      },
       "posture_anomaly": "否",
-      "people_exit_vehicle": "否",
-      "close_distance_pass": "否"
+      "people_exit_vehicle": {
+        "value": "否",
+        "timestamp_sec": null
+      },
+      "close_distance_pass": {
+        "value": "否",
+        "timestamp_sec": null
+      }
     }
   },
   "event": {
@@ -623,14 +905,21 @@ for block in ["traffic", "scene_elements", "evidence", "event"]:
     },
     "p1": {
       "collision_moment_visible": "无碰撞",
+      "collision_moment_sec": null,
       "pre_event_visible": "是",
       "post_event_visible": "是",
       "participants": []
     },
-    "p2": { "area_occluded_ratio": "不适用" }
+    "p2": {
+      "area_occluded_ratio": "不适用"
+    }
   },
   "label": {
-    "p0": { "accident": "否", "accident_type": "无事故", "confidence": "高" }
+    "p0": {
+      "accident": "否",
+      "accident_type": "无事故",
+      "confidence": "高"
+    }
   },
   "derived": {
     "congestion": "是",
@@ -642,7 +931,7 @@ for block in ["traffic", "scene_elements", "evidence", "event"]:
 
 ---
 
-## 13. 字段与训练任务的映射关系
+## 14. 字段与训练任务的映射关系
 
 | 训练任务 | 使用的标注字段（按优先级层直接取用） |
 |---|---|
@@ -666,9 +955,11 @@ p2 层字段 → 只作元数据：分桶 / 筛选 / 统计，不生成训练监
 
 ---
 
-## 14. 附录：枚举值字典
+## 15. 附录：枚举值字典
 
 ```yaml
+# 时序属性统一包装：{value: <枚举>, timestamp_sec: <float|null>}
+# 见第 3 节清单；以下枚举为各字段的 value 取值空间
 media_type: [video]
 scene: [高速高架, 城市路口, 城市普通路段, 隧道, 匝道收费站, 其他]
 camera_view: [路侧固定, 高点俯视, 卡口近景, 隧道固定, 其他]
@@ -689,6 +980,8 @@ state_after: [停止行车道, 停止路边, 驶离, 倒地, 侧翻, 姿态歪�
 event_stage_coverage: [全过程, 仅前+后, 仅后, 仅前, 不适用]
 tri_state: [是, 否, 不确定]
 tri_state_na: [是, 否, 不确定, 不适用]
+timed_value_object: "{value: tri_state|tri_state_na|..., timestamp_sec: float|null}"
+event_time_fields: [event_start_sec, event_end_sec, collision_moment_sec]
 placeholder: [未标注]
 confidence: [高, 中, 低]
 priority_level: [p0, p1, p2]

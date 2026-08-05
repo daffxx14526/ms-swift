@@ -1,8 +1,10 @@
 # 交通事故视频标注要素判定标准
 
-> 本文档是《交通事故视频素材结构化标注规范》（accident_annotation_spec.md）的配套细则，
+> 本文档是《交通事故视频素材结构化标注规范》（accident_annotation_spec_video.md）的配套细则，
 > 对各待标注要素给出**可操作的判定标准**：什么情况判"是"、什么情况判"否"、
 > 边界情况如何裁决。目标是让不同标注员对同一视频给出一致的标注结果。
+>
+> 视频时序属性的时间戳填写规则见第 9 节；字段结构见视频标注规范第 3 节。
 
 ---
 
@@ -430,12 +432,16 @@ c. 随后正常分开，双方均无停止、无接触后果。
 
 ## 9. 事件时间定位规则
 
+> 配套视频标注规范 v4：事件级纯时间字段 + 时序属性 `{value, timestamp_sec}`。
+> 时间原点为视频起点，单位秒，精度 0.1s。
+
 ### 9.1 `event_start_sec`
 
 ```text
 事故正样本：取以下最早出现者——
   碰撞接触瞬间 / 首个应急动作（急刹、急转）/ 首个异常行为（失控、偏离）
 困难负样本：可疑行为开始时刻（如双闪首次出现、排队形成）
+普通负样本：填 0
 ```
 
 ### 9.2 `event_end_sec`
@@ -443,9 +449,32 @@ c. 随后正常分开，双方均无停止、无接触后果。
 ```text
 状态稳定时刻：所有参与者静止且位置不再变化，
 或参与者驶离画面，或视频结束（取先到者）。
+普通负样本：填视频时长 duration_sec
 ```
 
-### 9.3 `event_stage_coverage`
+### 9.3 `collision_moment_sec`
+
+```text
+碰撞接触瞬间（两目标首次发生接触/撞击的时刻）。
+填写条件：collision_moment_visible = 是 → 必填；
+         = 否 / 无碰撞 → 必须为 null。
+通常与 evidence.collision_visible.timestamp_sec 一致或相差 ≤ 0.2s。
+```
+
+### 9.4 时序属性 `timestamp_sec` 定位通则
+
+```text
+① 标「首次可确认」该现象出现的时刻，不标最清晰帧（除非重合）；
+② value=是（或肯定枚举）→ timestamp_sec 必填；
+   value∈{否,不适用,未标注} → timestamp_sec = null；
+   value=不确定 → 有候选时刻可填，否则 null；
+③ 预警类（sudden_brake_wave）可早于 event_start_sec；
+   后果类（people_exit_vehicle、bypass_behavior、hazard_light 事故后）
+   通常 ≥ event_start_sec；
+④ 帧号换算：timestamp_sec = round(frame_idx / fps, 1)。
+```
+
+### 9.5 `event_stage_coverage`
 
 ```text
 全过程：  start 前 ≥ 2 秒正常状态可见，且碰撞/异常瞬间可见，且 end 后状态可见
