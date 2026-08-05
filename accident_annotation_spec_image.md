@@ -1,4 +1,4 @@
-# 交通事故图片素材结构化标注规范（v1）
+# 交通事故图片素材结构化标注规范（v2）
 
 > 目的：对路侧监控**单帧图片**（卡口抓拍、监控截图、视频抽帧）进行结构化标注，
 > 与视频标注规范配套，为图片类训练任务（静态证据感知 / 事故区域定位 / 图片二分类）提供数据基础。
@@ -6,10 +6,15 @@
 > 配套文档：视频数据标注见《accident_annotation_spec_video.md》；
 > 判定标准见《accident_annotation_criteria.md》（时序类标准不适用于本规范）。
 >
+> v2 变更：`scene_elements` 按场景拆分为独立子对象（与视频规范 v5 对齐）。
+>
 > 与视频规范的核心差异：**图片没有时间维度**——所有依赖"过程/变化/闪烁"的字段
 > 被移除或替换为单帧可判的静态代理字段；JSON 同样采用固定结构 + p0/p1/p2 优先级分组。
-> 视频规范 v4 的 `{value, timestamp_sec}` 时序对象与 `event_*_sec` /
+> 视频规范的 `{value, timestamp_sec}` 时序对象与 `event_*_sec` /
 > `collision_moment_sec` **均不适用于图片**。
+>
+> 精简版（仅最高优先级字段、无优先级分组表述）见
+> 《accident_annotation_spec_image_core.md》。
 
 ---
 
@@ -20,7 +25,7 @@
 3. [固定 JSON 结构总览](#3-固定-json-结构总览)
 4. [元信息与环境字段](#4-元信息与环境字段)
 5. [交通状态字段（静态代理）](#5-交通状态字段静态代理)
-6. [场景要素字段](#6-场景要素字段)
+6. [场景要素字段（按场景分对象）](#6-场景要素字段按场景分对象)
 7. [证据字段（静态证据）](#7-证据字段静态证据)
 8. [事故区域与参与者字段](#8-事故区域与参与者字段)
 9. [最终标签与派生字段](#9-最终标签与派生字段)
@@ -72,19 +77,26 @@ video_frame：视频抽帧（可继承视频标注的 label 与部分字段，�
 
 ```json
 {
-  "meta":           { "...": "工具自动填，见第4节" },
-  "env":            { "p1": { }, "p2": { } },
-  "traffic":        { "p0": { }, "p1": { } },
-  "scene_elements": { "p1": { }, "p2": { } },
-  "evidence":       { "p0": { }, "p1": { } },
-  "event":          { "p0": { }, "p1": { } },
-  "label":          { "p0": { } },
-  "derived":        { "...": "脚本自动派生" }
+  "meta":    { "...": "工具自动填，见第4节" },
+  "env":     { "p1": { }, "p2": { } },
+  "traffic": { "p0": { }, "p1": { } },
+  "scene_elements": {
+    "高速高架":     { "p1": { }, "p2": { } },
+    "城市路口":     { "p1": { }, "p2": { } },
+    "城市普通路段": { "p1": { }, "p2": { } },
+    "隧道":         { "p1": { }, "p2": { } },
+    "匝道收费站":   { "p1": { }, "p2": { } },
+    "其他":         { "p1": { }, "p2": { } }
+  },
+  "evidence": { "p0": { }, "p1": { } },
+  "event":    { "p0": { }, "p1": { } },
+  "label":    { "p0": { } },
+  "derived":  { "...": "脚本自动派生" }
 }
 ```
 
 约定与视频规范相同：`p0/p1/p2` 子对象始终存在；未标注层级填 `未标注`；
-场景不适用字段填 `不适用`（工具锁定）。
+`scene_elements` 六个场景键始终存在，仅 `meta.scene` 对应对象填写字段，其余为空。
 
 ---
 
@@ -129,42 +141,147 @@ video_frame：视频抽帧（可继承视频标注的 label 与部分字段，�
 
 ---
 
-## 6. 场景要素字段
+## 6. 场景要素字段（按场景分对象）
 
-适用性矩阵与视频规范 6.3 节相同；时序类字段已移除。
+`scene_elements` 按场景拆分为独立子对象；键名与 `meta.scene` 枚举一致：
 
-### 6.1 p1 子对象
+```json
+{
+  "scene_elements": {
+    "高速高架": { "p1": { }, "p2": { } },
+    "城市路口": { "p1": { }, "p2": { } },
+    "城市普通路段": { "p1": { }, "p2": { } },
+    "隧道": { "p1": { }, "p2": { } },
+    "匝道收费站": { "p1": { }, "p2": { } },
+    "其他": { "p1": { }, "p2": { } }
+  }
+}
+```
 
-| 字段 | 适用场景 | 取值 | 说明 |
-|---|---|---|---|
-| `stop_position` | 全部场景 | 行车道 / 应急车道 / 路边 / 无停车 / 不适用 | 图片中静止推断：占道且无行驶迹象 |
-| `emergency_lane_occupied` | 高速高架、隧道 | 是 / 否 / 无应急车道 / 不适用 | - |
-| `vehicle_in_lane_stationary_suspected` | 高速高架、隧道 | 是 / 否 / 不确定 / 不适用 | 疑似行车道内静止（单帧对"静止"只能是疑似） |
-| `queue_at_signal` | 城市路口 | 是 / 否 / 不确定 / 不适用 | 停止线后整齐队形 +（可见时）红灯 |
-| `rear_end_chain_visible` | 高速高架 | 是 / 否 / 不适用 | 多车首尾贴合链（追尾链的静态形态） |
-| `vru_involved` | 城市路口、城市普通路段 | 行人 / 非机动车 / 两者 / 无 / 不适用 | - |
-| `guardrail_impact` | 高速高架、匝道收费站 | 是 / 否 / 不确定 / 不适用 | 护栏变形/车辆抵触护栏可见 |
-| `debris_on_road` | 高速高架、隧道 | 是 / 否 / 不确定 / 不适用 | - |
-| `smoke_in_view` | 隧道 | 是 / 否 / 不确定 / 不适用 | - |
+约定：
 
-### 6.2 p2 子对象
+1. **六个场景键始终存在**；
+2. 仅 `meta.scene` 对应的场景对象填写字段；其余场景对象固定为
+   `{"p1": {}, "p2": {}}`；
+3. 不再使用跨场景扁平字段 + `不适用` 锁定；场景差异通过「不同场景对象」表达；
+4. 各场景对象内部仍按 `p1 / p2` 分组（场景要素无 p0 层）。
 
-| 字段 | 适用场景 | 取值 |
+### `高速高架`
+
+#### p1（主力字段）
+
+| 字段 | 取值形式 | 说明 |
 |---|---|---|
-| `roadside_parking_present` | 城市普通路段 | 是 / 否 / 不适用 |
-| `double_parked` | 城市普通路段 | 是 / 否 / 不适用 |
-| `bus_stop_area` | 城市普通路段 | 是 / 否 / 不适用 |
-| `toll_queue` | 匝道收费站 | 是 / 否 / 不适用 |
-| `intersection_blocked` | 城市路口 | 是 / 否 / 不适用 |
-| `signal_state` | 城市路口 | 红 / 绿 / 黄 / 不可见 / 不适用 |
-| `crosswalk_area` | 城市路口、城市普通路段 | 是 / 否 / 不适用 |
-| `delivery_rider_involved` | 城市路口、城市普通路段 | 是 / 否 / 不适用 |
-| `truck_involved` | 全部场景 | 是 / 否 |
-| `construction_zone` | 全部场景 | 是 / 否 |
-| `tunnel_zone` | 隧道 | 入口段 / 中段 / 出口段 / 不适用 |
-| `narrow_shoulder` | 隧道 | 有硬路肩 / 无硬路肩 / 不适用 |
-| `sharp_curve_area` | 匝道收费站 | 是 / 否 / 不适用 |
-| `ramp_type` | 匝道收费站 | 上匝道 / 下匝道 / 收费站广场 / 不确定 / 不适用 |
+| `stop_position` | 行车道 / 应急车道 / 路边 / 无停车 | 图片中静止推断：占道且无行驶迹象 |
+| `emergency_lane_occupied` | 是 / 否 / 无应急车道 | 应急车道占用 |
+| `vehicle_in_lane_stationary_suspected` | 是 / 否 / 不确定 | 疑似行车道内静止（单帧只能是疑似） |
+| `rear_end_chain_visible` | 是 / 否 | 多车首尾贴合链（追尾链静态形态） |
+| `guardrail_impact` | 是 / 否 / 不确定 | 护栏变形/车辆抵触护栏可见 |
+| `debris_on_road` | 是 / 否 / 不确定 | 路面碎片 |
+
+#### p2（次要字段）
+
+| 字段 | 取值形式 | 说明 |
+|---|---|---|
+| `truck_involved` | 是 / 否 | 货车卷入 |
+| `construction_zone` | 是 / 否 | 施工区域 |
+
+### `城市路口`
+
+#### p1（主力字段）
+
+| 字段 | 取值形式 | 说明 |
+|---|---|---|
+| `stop_position` | 行车道 / 应急车道 / 路边 / 无停车 | 图片中静止推断：占道且无行驶迹象 |
+| `queue_at_signal` | 是 / 否 / 不确定 | 停止线后整齐队形 +（可见时）红灯 |
+| `vru_involved` | 行人 / 非机动车 / 两者 / 无 | 弱势交通参与者 |
+
+#### p2（次要字段）
+
+| 字段 | 取值形式 | 说明 |
+|---|---|---|
+| `intersection_blocked` | 是 / 否 | 路口被堵 |
+| `signal_state` | 红 / 绿 / 黄 / 不可见 | 信号灯状态 |
+| `crosswalk_area` | 是 / 否 | 人行横道区域 |
+| `delivery_rider_involved` | 是 / 否 | 外卖骑手 |
+| `truck_involved` | 是 / 否 | 货车卷入 |
+| `construction_zone` | 是 / 否 | 施工区域 |
+
+### `城市普通路段`
+
+#### p1（主力字段）
+
+| 字段 | 取值形式 | 说明 |
+|---|---|---|
+| `stop_position` | 行车道 / 应急车道 / 路边 / 无停车 | 图片中静止推断：占道且无行驶迹象 |
+| `vru_involved` | 行人 / 非机动车 / 两者 / 无 | 弱势交通参与者 |
+
+#### p2（次要字段）
+
+| 字段 | 取值形式 | 说明 |
+|---|---|---|
+| `roadside_parking_present` | 是 / 否 | 路边停车 |
+| `double_parked` | 是 / 否 | 双排停车 |
+| `bus_stop_area` | 是 / 否 | 公交站 |
+| `crosswalk_area` | 是 / 否 | 人行横道区域 |
+| `delivery_rider_involved` | 是 / 否 | 外卖骑手 |
+| `truck_involved` | 是 / 否 | 货车卷入 |
+| `construction_zone` | 是 / 否 | 施工区域 |
+
+### `隧道`
+
+#### p1（主力字段）
+
+| 字段 | 取值形式 | 说明 |
+|---|---|---|
+| `stop_position` | 行车道 / 应急车道 / 路边 / 无停车 | 图片中静止推断：占道且无行驶迹象 |
+| `emergency_lane_occupied` | 是 / 否 / 无应急车道 | 应急车道占用 |
+| `vehicle_in_lane_stationary_suspected` | 是 / 否 / 不确定 | 疑似行车道内静止（单帧只能是疑似） |
+| `debris_on_road` | 是 / 否 / 不确定 | 路面碎片 |
+| `smoke_in_view` | 是 / 否 / 不确定 | 烟雾可见 |
+
+#### p2（次要字段）
+
+| 字段 | 取值形式 | 说明 |
+|---|---|---|
+| `truck_involved` | 是 / 否 | 货车卷入 |
+| `construction_zone` | 是 / 否 | 施工区域 |
+| `tunnel_zone` | 入口段 / 中段 / 出口段 | 隧道区段 |
+| `narrow_shoulder` | 有硬路肩 / 无硬路肩 | 硬路肩 |
+
+### `匝道收费站`
+
+#### p1（主力字段）
+
+| 字段 | 取值形式 | 说明 |
+|---|---|---|
+| `stop_position` | 行车道 / 应急车道 / 路边 / 无停车 | 图片中静止推断：占道且无行驶迹象 |
+| `guardrail_impact` | 是 / 否 / 不确定 | 护栏变形/车辆抵触护栏可见 |
+
+#### p2（次要字段）
+
+| 字段 | 取值形式 | 说明 |
+|---|---|---|
+| `toll_queue` | 是 / 否 | 收费站排队 |
+| `truck_involved` | 是 / 否 | 货车卷入 |
+| `construction_zone` | 是 / 否 | 施工区域 |
+| `sharp_curve_area` | 是 / 否 | 急弯 |
+| `ramp_type` | 上匝道 / 下匝道 / 收费站广场 / 不确定 | 匝道类型 |
+
+### `其他`
+
+#### p1（主力字段）
+
+| 字段 | 取值形式 | 说明 |
+|---|---|---|
+| `stop_position` | 行车道 / 应急车道 / 路边 / 无停车 | 图片中静止推断：占道且无行驶迹象 |
+
+#### p2（次要字段）
+
+| 字段 | 取值形式 | 说明 |
+|---|---|---|
+| `truck_involved` | 是 / 否 | 货车卷入 |
+| `construction_zone` | 是 / 否 | 施工区域 |
 
 ---
 
@@ -292,7 +409,7 @@ video_frame：视频抽帧（可继承视频标注的 label 与部分字段，�
   rear_lights_on_both_sides=是 且 accident=否      （疑似双闪负样本）
   abnormal_stop_posture=是 且 accident=否          （异常停放但非事故）
   close_distance_pair=是                           （近距离负样本）
-  queue_at_signal=是                               （等灯队形）
+  scene_elements[<scene>].p1.queue_at_signal=是     （等灯队形）
 ```
 
 ### 10.4 校验规则
@@ -319,40 +436,62 @@ video_frame：视频抽帧（可继承视频标注的 label 与部分字段，�
     "annotator_id": "A11"
   },
   "env": {
-    "p1": { "lighting": "白天", "visibility": "高" },
-    "p2": { "weather": "晴", "road_surface": "干燥", "glare_or_reflection": "否" }
-  },
-  "traffic": {
-    "p0": { "traffic_density": "中等", "flow_gap_pattern": "否" },
-    "p1": { "queue_formation": "否", "pedestrian_gathering": "是", "brake_lights_chain": "不可见" }
-  },
-  "scene_elements": {
     "p1": {
-      "stop_position": "行车道",
-      "emergency_lane_occupied": "不适用",
-      "vehicle_in_lane_stationary_suspected": "不适用",
-      "queue_at_signal": "否",
-      "rear_end_chain_visible": "不适用",
-      "vru_involved": "非机动车",
-      "guardrail_impact": "不适用",
-      "debris_on_road": "不适用",
-      "smoke_in_view": "不适用"
+      "lighting": "白天",
+      "visibility": "高"
     },
     "p2": {
-      "roadside_parking_present": "不适用",
-      "double_parked": "不适用",
-      "bus_stop_area": "不适用",
-      "toll_queue": "不适用",
-      "intersection_blocked": "否",
-      "signal_state": "绿",
-      "crosswalk_area": "是",
-      "delivery_rider_involved": "是",
-      "truck_involved": "否",
-      "construction_zone": "否",
-      "tunnel_zone": "不适用",
-      "narrow_shoulder": "不适用",
-      "sharp_curve_area": "不适用",
-      "ramp_type": "不适用"
+      "weather": "晴",
+      "road_surface": "干燥",
+      "glare_or_reflection": "否"
+    }
+  },
+  "traffic": {
+    "p0": {
+      "traffic_density": "中等",
+      "flow_gap_pattern": "否"
+    },
+    "p1": {
+      "queue_formation": "否",
+      "pedestrian_gathering": "是",
+      "brake_lights_chain": "不可见"
+    }
+  },
+  "scene_elements": {
+    "高速高架": {
+      "p1": {},
+      "p2": {}
+    },
+    "城市路口": {
+      "p1": {
+        "stop_position": "行车道",
+        "queue_at_signal": "否",
+        "vru_involved": "非机动车"
+      },
+      "p2": {
+        "intersection_blocked": "否",
+        "signal_state": "绿",
+        "crosswalk_area": "是",
+        "delivery_rider_involved": "是",
+        "truck_involved": "否",
+        "construction_zone": "否"
+      }
+    },
+    "城市普通路段": {
+      "p1": {},
+      "p2": {}
+    },
+    "隧道": {
+      "p1": {},
+      "p2": {}
+    },
+    "匝道收费站": {
+      "p1": {},
+      "p2": {}
+    },
+    "其他": {
+      "p1": {},
+      "p2": {}
     }
   },
   "evidence": {
@@ -380,7 +519,12 @@ video_frame：视频抽帧（可继承视频标注的 label 与部分字段，�
   },
   "event": {
     "p0": {
-      "accident_area_box": [540, 410, 380, 260],
+      "accident_area_box": [
+        540,
+        410,
+        380,
+        260
+      ],
       "accident_area_location": "路口中央"
     },
     "p1": {
@@ -389,20 +533,34 @@ video_frame：视频抽帧（可继承视频标注的 label 与部分字段，�
           "type": "电动车",
           "state_now": "侧翻",
           "rear_lights_on": "不可见",
-          "roi_box": [560, 450, 180, 160]
+          "roi_box": [
+            560,
+            450,
+            180,
+            160
+          ]
         },
         {
           "type": "轿车",
           "state_now": "姿态歪斜",
           "rear_lights_on": "否",
-          "roi_box": [640, 400, 260, 200]
+          "roi_box": [
+            640,
+            400,
+            260,
+            200
+          ]
         }
       ],
       "area_occluded_ratio": "无遮挡"
     }
   },
   "label": {
-    "p0": { "accident": "是", "accident_type": "撞行人非机动车", "confidence": "高" }
+    "p0": {
+      "accident": "是",
+      "accident_type": "撞行人非机动车",
+      "confidence": "高"
+    }
   },
   "derived": {
     "hard": false,
@@ -417,7 +575,7 @@ video_frame：视频抽帧（可继承视频标注的 label 与部分字段，�
 
 | 训练任务 | 使用字段 |
 |---|---|
-| 图片属性感知 QA | `meta.scene`、`traffic.p0`、`scene_elements.p1` |
+| 图片属性感知 QA | `meta.scene`、`traffic.p0`、`scene_elements[<scene>].p1` |
 | 静态证据判断 QA | `evidence.p0` + `evidence.p1` |
 | 图片对比判别（事故/密集排队/规范停放/近距离 四选一） | `label.p0.accident` + `congestion_only_suspected` / `normal_parking_posture` / `close_distance_pair` 映射 |
 | 图片二分类（部署格式） | `label.p0.accident` |
