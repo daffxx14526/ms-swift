@@ -1,4 +1,4 @@
-# 交通事故图片素材结构化标注规范（v2）
+# 交通事故图片素材结构化标注规范（v3）
 
 > 目的：对路侧监控**单帧图片**（卡口抓拍、监控截图、视频抽帧）进行结构化标注，
 > 与视频标注规范配套，为图片类训练任务（静态证据感知 / 事故区域定位 / 图片二分类）提供数据基础。
@@ -6,15 +6,14 @@
 > 配套文档：视频数据标注见《accident_annotation_spec_video.md》；
 > 判定标准见《accident_annotation_criteria.md》（时序类标准不适用于本规范）。
 >
-> v2 变更：`scene_elements` 按场景拆分为独立子对象（与视频规范 v5 对齐）。
+> v3 变更：位置相关属性增加 **`bbox: [x,y,w,h]`** 坐标标注；
+> 图片仍无时间窗（不适用 `start_sec`/`end_sec`）。
 >
-> 与视频规范的核心差异：**图片没有时间维度**——所有依赖"过程/变化/闪烁"的字段
-> 被移除或替换为单帧可判的静态代理字段；JSON 同样采用固定结构 + p0/p1/p2 优先级分组。
-> 视频规范的 `{value, timestamp_sec}` 时序对象与 `event_*_sec` /
-> `collision_moment_sec` **均不适用于图片**。
+> 与视频规范的核心差异：**图片没有时间维度**——过程类字段改为静态代理；
+> 视频的 `{value, start_sec, end_sec}` 与 `event_*_sec` **均不适用于图片**。
 >
-> 精简版（仅最高优先级字段、无优先级分组表述）见
-> 《accident_annotation_spec_image_core.md》。
+> 精简版见《accident_annotation_spec_image_core.md》；
+> 带注释演示样例见 `annotation_examples/accident_annotation_example_image.jsonc`。
 
 ---
 
@@ -285,6 +284,31 @@ video_frame：视频抽帧（可继承视频标注的 label 与部分字段，�
 
 ---
 
+
+### 坐标标注约定 `bbox`（图片专用补充）
+
+位置相关属性统一使用对象（**禁止**对下列字段再写纯字符串）：
+
+```json
+{"value": "是", "bbox": [540, 410, 180, 160]}
+```
+
+| 约定 | 说明 |
+|---|---|
+| 格式 | `[x, y, w, h]`：左上角像素 + 宽高，相对整张图片 |
+| 肯定取值 | `bbox` 必填 |
+| 否 / 不适用 / 不可见 / 未标注 | `bbox = null` |
+
+**位置相关属性清单**：`flow_gap_pattern`、`stop_position`、`vehicle_in_lane_stationary_suspected`、
+`emergency_lane_occupied`、`rear_end_chain_visible`、`guardrail_impact`、`debris_on_road`、
+`smoke_in_view`、`collision_contact_visible`、`person_down`、`motor_vehicle_rollover`、
+`non_motor_rollover`、`vehicle_fire`、`vehicle_deformation`、`abnormal_stop_posture`、
+`lane_avoidance_pattern`、`rear_lights_on_both_sides`、`normal_parking_posture`、
+`debris_scatter`、`people_gathered_around`、`fluid_on_road`、`close_distance_pair`；
+以及 `accident_area_box`、`participants[].roi_box`。
+
+图片**不使用** `start_sec` / `end_sec`。
+
 ## 7. 证据字段（静态证据）
 
 ### 7.1 p0 子对象（事故判定核心）
@@ -378,7 +402,8 @@ video_frame：视频抽帧（可继承视频标注的 label 与部分字段，�
 
 ### 10.1 取值约定
 
-与视频规范一致：是/否/不确定 + 不适用（工具锁定）+ 未标注（分层占位）。
+取值：是/否/不确定 + 未标注；位置相关字段为 `{value, bbox}` 对象。
+规则判断时读 `.value`。
 图片标注中"不确定"的使用标准放宽为：**放大查看后仍无法判断**（无逐帧回看可用）。
 
 ### 10.2 图片事故正样本准入规则（比视频严格）
@@ -449,7 +474,10 @@ video_frame：视频抽帧（可继承视频标注的 label 与部分字段，�
   "traffic": {
     "p0": {
       "traffic_density": "中等",
-      "flow_gap_pattern": "否"
+      "flow_gap_pattern": {
+        "value": "否",
+        "bbox": null
+      }
     },
     "p1": {
       "queue_formation": "否",
@@ -464,7 +492,15 @@ video_frame：视频抽帧（可继承视频标注的 label 与部分字段，�
     },
     "城市路口": {
       "p1": {
-        "stop_position": "行车道",
+        "stop_position": {
+          "value": "行车道",
+          "bbox": [
+            800,
+            340,
+            420,
+            300
+          ]
+        },
         "queue_at_signal": "否",
         "vru_involved": "非机动车"
       },
@@ -496,25 +532,97 @@ video_frame：视频抽帧（可继承视频标注的 label 与部分字段，�
   },
   "evidence": {
     "p0": {
-      "collision_contact_visible": "否",
-      "person_down": "是",
-      "motor_vehicle_rollover": "否",
-      "non_motor_rollover": "是",
-      "vehicle_fire": "否",
-      "vehicle_deformation": "不确定",
-      "abnormal_stop_posture": "是",
+      "collision_contact_visible": {
+        "value": "否",
+        "bbox": null
+      },
+      "person_down": {
+        "value": "是",
+        "bbox": [
+          560,
+          450,
+          180,
+          160
+        ]
+      },
+      "motor_vehicle_rollover": {
+        "value": "否",
+        "bbox": null
+      },
+      "non_motor_rollover": {
+        "value": "是",
+        "bbox": [
+          560,
+          450,
+          180,
+          160
+        ]
+      },
+      "vehicle_fire": {
+        "value": "否",
+        "bbox": null
+      },
+      "vehicle_deformation": {
+        "value": "不确定",
+        "bbox": [
+          780,
+          380,
+          300,
+          240
+        ]
+      },
+      "abnormal_stop_posture": {
+        "value": "是",
+        "bbox": [
+          560,
+          450,
+          200,
+          180
+        ]
+      },
       "collision_area_occluded": "否",
-      "lane_avoidance_pattern": "不确定",
-      "rear_lights_on_both_sides": "不可见",
+      "lane_avoidance_pattern": {
+        "value": "不确定",
+        "bbox": [
+          480,
+          300,
+          500,
+          350
+        ]
+      },
+      "rear_lights_on_both_sides": {
+        "value": "不可见",
+        "bbox": null
+      },
       "congestion_only_suspected": "否",
-      "normal_parking_posture": "否"
+      "normal_parking_posture": {
+        "value": "否",
+        "bbox": null
+      }
     },
     "p1": {
-      "debris_scatter": "否",
+      "debris_scatter": {
+        "value": "否",
+        "bbox": null
+      },
       "occlusion_type": "无遮挡",
-      "people_gathered_around": "是",
-      "fluid_on_road": "否",
-      "close_distance_pair": "否"
+      "people_gathered_around": {
+        "value": "是",
+        "bbox": [
+          540,
+          400,
+          300,
+          250
+        ]
+      },
+      "fluid_on_road": {
+        "value": "否",
+        "bbox": null
+      },
+      "close_distance_pair": {
+        "value": "否",
+        "bbox": null
+      }
     }
   },
   "event": {

@@ -5,6 +5,8 @@
 >
 > 完整字段、场景要素、环境细节见完整版规范；判定细则见《accident_annotation_criteria.md》
 > （时序类标准不适用于图片）。
+>
+> 带注释演示样例：`annotation_examples/accident_annotation_example_image.jsonc`。
 
 ---
 
@@ -27,7 +29,7 @@
 
 - 仅覆盖细标图片**必须标注**的核心字段；
 - 不含环境、场景要素、参与者列表等辅助字段；
-- 图片无时间轴：不使用 `{value, timestamp_sec}`，也不标注 `event_start/end_sec`。
+- 图片无时间轴：不使用 `start_sec`/`end_sec`；位置相关属性使用 `{value, bbox}`。
 
 ---
 
@@ -68,7 +70,7 @@
 | 字段 | 取值 | 说明 |
 |---|---|---|
 | `traffic_density` | 稀疏 / 中等 / 密集 / 排队队形 | 静态密度 |
-| `flow_gap_pattern` | 是 / 否 / 不确定 | 断层形态：上游积压、下游空置 |
+| `flow_gap_pattern` | `{value, bbox}` | 断层形态；肯定时标断层区域 |
 
 ---
 
@@ -78,28 +80,28 @@
 
 | 字段 | 取值 | 说明 |
 |---|---|---|
-| `collision_contact_visible` | 是 / 否 / 不确定 | 两目标接触/贴合状态可见 |
-| `person_down` | 是 / 否 / 不确定 | 行人/骑车人倒地 |
-| `motor_vehicle_rollover` | 是 / 否 / 不确定 | 机动车侧翻 |
-| `non_motor_rollover` | 是 / 否 / 不确定 | 非机动车侧翻 |
-| `vehicle_fire` | 是 / 否 / 不确定 | 机动车着火 |
-| `vehicle_deformation` | 是 / 否 / 不确定 | 车损可见 |
+| `collision_contact_visible` | `{value, bbox}` | 接触区域 |
+| `person_down` | `{value, bbox}` | 倒地目标 |
+| `motor_vehicle_rollover` | `{value, bbox}` | 侧翻车辆 |
+| `non_motor_rollover` | `{value, bbox}` | 侧翻目标 |
+| `vehicle_fire` | `{value, bbox}` | 着火车辆 |
+| `vehicle_deformation` | `{value, bbox}` | 车损目标 |
 
 ### 间接静态证据
 
 | 字段 | 取值 | 说明 |
 |---|---|---|
-| `abnormal_stop_posture` | 是 / 否 / 不确定 | 异常停放形态（车道中间/斜停/跨线） |
+| `abnormal_stop_posture` | `{value, bbox}` | 异常停放车辆 |
 | `collision_area_occluded` | 是 / 否 | 疑似事故区域被遮挡 |
-| `lane_avoidance_pattern` | 是 / 否 / 不确定 | 绕行队形 |
+| `lane_avoidance_pattern` | `{value, bbox}` | 绕行区域 |
 
 ### 误报判别
 
 | 字段 | 取值 | 说明 |
 |---|---|---|
-| `rear_lights_on_both_sides` | 是 / 否 / 不可见 | 左右尾灯同时亮（疑似双闪的静态依据） |
+| `rear_lights_on_both_sides` | `{value, bbox}` | 疑似双闪车辆；不可见时 bbox=null |
 | `congestion_only_suspected` | 是 / 否 | 仅密集/排队，无碰撞证据 |
-| `normal_parking_posture` | 是 / 否 / 不确定 | 规范停放形态（临停特征） |
+| `normal_parking_posture` | `{value, bbox}` | 停放车辆 |
 
 ---
 
@@ -107,7 +109,7 @@
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| `accident_area_box` | [x,y,w,h] 或 null | 事故区域外接框；负样本 null |
+| `accident_area_box` | `[x,y,w,h]` 或 null | 事故区域坐标；负样本 null |
 | `accident_area_location` | 行车道内 / 路口中央 / 应急车道 / 路边 / 匝道 / 隧道行车道 / 画面边缘 / 不适用 | 位置类别 |
 
 ---
@@ -136,11 +138,11 @@
 ### 正样本准入（比视频严格）
 
 ```text
-① 直接证据任一为"是"：
+① 直接证据任一 value="是"：
    collision_contact_visible / person_down / motor_vehicle_rollover /
    non_motor_rollover / vehicle_fire
-② vehicle_deformation=是 且 abnormal_stop_posture=是
-③ abnormal_stop_posture=是 且 lane_avoidance_pattern=是
+② vehicle_deformation.value=是 且 abnormal_stop_posture.value=是
+③ abnormal_stop_posture.value=是 且 lane_avoidance_pattern.value=是
    （完整版还可计入 debris_scatter / people_gathered_around / fluid_on_road）
 ```
 
@@ -183,24 +185,87 @@
   },
   "traffic": {
     "traffic_density": "中等",
-    "flow_gap_pattern": "否"
+    "flow_gap_pattern": {
+      "value": "否",
+      "bbox": null
+    }
   },
   "evidence": {
-    "collision_contact_visible": "否",
-    "person_down": "是",
-    "motor_vehicle_rollover": "否",
-    "non_motor_rollover": "是",
-    "vehicle_fire": "否",
-    "vehicle_deformation": "不确定",
-    "abnormal_stop_posture": "是",
+    "collision_contact_visible": {
+      "value": "否",
+      "bbox": null
+    },
+    "person_down": {
+      "value": "是",
+      "bbox": [
+        560,
+        450,
+        180,
+        160
+      ]
+    },
+    "motor_vehicle_rollover": {
+      "value": "否",
+      "bbox": null
+    },
+    "non_motor_rollover": {
+      "value": "是",
+      "bbox": [
+        560,
+        450,
+        180,
+        160
+      ]
+    },
+    "vehicle_fire": {
+      "value": "否",
+      "bbox": null
+    },
+    "vehicle_deformation": {
+      "value": "不确定",
+      "bbox": [
+        780,
+        380,
+        300,
+        240
+      ]
+    },
+    "abnormal_stop_posture": {
+      "value": "是",
+      "bbox": [
+        560,
+        450,
+        200,
+        180
+      ]
+    },
     "collision_area_occluded": "否",
-    "lane_avoidance_pattern": "不确定",
-    "rear_lights_on_both_sides": "不可见",
+    "lane_avoidance_pattern": {
+      "value": "不确定",
+      "bbox": [
+        480,
+        300,
+        500,
+        350
+      ]
+    },
+    "rear_lights_on_both_sides": {
+      "value": "不可见",
+      "bbox": null
+    },
     "congestion_only_suspected": "否",
-    "normal_parking_posture": "否"
+    "normal_parking_posture": {
+      "value": "否",
+      "bbox": null
+    }
   },
   "event": {
-    "accident_area_box": [540, 410, 380, 260],
+    "accident_area_box": [
+      540,
+      410,
+      380,
+      260
+    ],
     "accident_area_location": "路口中央"
   },
   "label": {

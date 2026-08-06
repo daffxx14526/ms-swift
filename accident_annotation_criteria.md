@@ -432,8 +432,8 @@ c. 随后正常分开，双方均无停止、无接触后果。
 
 ## 9. 事件时间定位规则
 
-> 配套视频标注规范 v4：事件级纯时间字段 + 时序属性 `{value, timestamp_sec}`。
-> 时间原点为视频起点，单位秒，精度 0.1s。
+> 配套视频标注规范 v6：事件级纯时间字段 + 时序属性 `{value, start_sec, end_sec[, bbox]}`。
+> 时间原点为视频起点，单位秒，精度 0.1s；位置相关属性另标 `bbox=[x,y,w,h]`。
 
 ### 9.1 `event_start_sec`
 
@@ -452,26 +452,25 @@ c. 随后正常分开，双方均无停止、无接触后果。
 普通负样本：填视频时长 duration_sec
 ```
 
-### 9.3 `collision_moment_sec`
+### 9.3 `collision_moment_start_sec` / `collision_moment_end_sec`
 
 ```text
-碰撞接触瞬间（两目标首次发生接触/撞击的时刻）。
-填写条件：collision_moment_visible = 是 → 必填；
+碰撞接触时间窗（两目标发生接触/撞击的起止）。
+填写条件：collision_moment_visible = 是 → 二者必填；
          = 否 / 无碰撞 → 必须为 null。
-通常与 evidence.collision_visible.timestamp_sec 一致或相差 ≤ 0.2s。
+通常 start 与 evidence.collision_visible.start_sec 相差 ≤ 0.2s；
+瞬时碰撞可令 end = start 或 start+0.2。
 ```
 
-### 9.4 时序属性 `timestamp_sec` 定位通则
+### 9.4 时序属性 `start_sec` / `end_sec` 定位通则
 
 ```text
-① 标「首次可确认」该现象出现的时刻，不标最清晰帧（除非重合）；
-② value=是（或肯定枚举）→ timestamp_sec 必填；
-   value∈{否,不适用,未标注} → timestamp_sec = null；
-   value=不确定 → 有候选时刻可填，否则 null；
+① start：首次可确认出现；end：现象结束/离画/稳定；瞬时可 start=end；
+② value=是 → start/end 必填；value∈{否,不适用,未标注} → 均为 null；
 ③ 预警类（sudden_brake_wave）可早于 event_start_sec；
-   后果类（people_exit_vehicle、bypass_behavior、hazard_light 事故后）
-   通常 ≥ event_start_sec；
-④ 帧号换算：timestamp_sec = round(frame_idx / fps, 1)。
+   后果类通常 ≥ event_start_sec；
+④ 帧号换算：sec = round(frame_idx / fps, 1)；
+⑤ 位置相关属性同时填写 bbox=[x,y,w,h]（画面左上角坐标系）。
 ```
 
 ### 9.5 `event_stage_coverage`

@@ -4,6 +4,8 @@
 > 只保留事故判定所需的**最高优先级**字段，JSON **不再**使用优先级分组键。
 >
 > 完整字段、场景要素、环境细节见完整版规范；判定细则见《accident_annotation_criteria.md》。
+>
+> 带注释演示样例：`annotation_examples/accident_annotation_example_video.jsonc`。
 
 ---
 
@@ -27,32 +29,32 @@
 
 - 仅覆盖进入细标流程后、**必须标注**的核心字段；
 - 不含环境、场景要素、参与者列表等辅助字段；
-- 时序属性仍使用 `{value, timestamp_sec}`（见第 2 节）。
+- 时序属性仍使用 `{value, start_sec, end_sec}`（见第 2 节）。
 
 ---
 
-## 2. 时间戳约定
+## 2. 时间窗与坐标约定
 
-时序属性统一为对象：
+时序属性统一为：
 
 ```json
-{"value": "是", "timestamp_sec": 6.5}
+{"value": "是", "start_sec": 6.5, "end_sec": 7.0, "bbox": [780, 360, 280, 220]}
 ```
 
-| 情况 | `value` | `timestamp_sec` |
-|---|---|---|
-| 确认观察到 | `是` | 首次可确认时刻（必填） |
-| 确认未发生 | `否` | `null` |
-| 看不清 | `不确定` | 有候选可填，否则 `null` |
+| 情况 | `value` | `start_sec`/`end_sec` | `bbox` |
+|---|---|---|---|
+| 确认观察到 | `是` | 必填时间窗 | 位置相关则必填 |
+| 确认未发生 | `否` | `null` | `null` |
+| 看不清 | `不确定` | 可选 | 可选 |
 
-- 原点：视频起点 `0.0`；单位：秒；精度：`0.1s`
-- 范围：`0 ≤ timestamp_sec ≤ meta.duration_sec`
+- 原点：视频起点；单位：秒；精度：`0.1s`；要求 `start_sec ≤ end_sec`
+- `bbox = [x, y, w, h]`：画面左上角像素坐标系
+- 事件级：`event_start_sec` / `event_end_sec`
 
-本规范中的时序属性：`collision_visible`、`person_down`、`motor_vehicle_rollover`、
+本规范时序+位置字段：`collision_visible`、`person_down`、`motor_vehicle_rollover`、
 `non_motor_rollover`、`vehicle_fire`、`abnormal_stop`、`bypass_behavior`、
 `hazard_light`、`smooth_pullover`、`near_miss`。
-
-事件级纯时间字段（直接 float）：`event_start_sec`、`event_end_sec`。
+`flow_interruption_point` 为位置字段：`{"value","bbox"}`（无时间窗）。
 
 ---
 
@@ -91,7 +93,7 @@
 | 字段 | 取值 | 说明 |
 |---|---|---|
 | `traffic_flow` | 畅通 / 缓行 / 拥堵 / 停止排队 / 某点中断 | **"某点中断"是事故最强间接信号** |
-| `flow_interruption_point` | 是 / 否 / 不确定 | 固定中断点（下游畅通、上游积压） |
+| `flow_interruption_point` | `{value, bbox}` | 固定中断点；肯定时必标中断区域坐标 |
 
 ---
 
@@ -101,31 +103,31 @@
 
 ### 直接证据（时序对象）
 
-| 字段 | value | timestamp 含义 |
+| 字段 | value | start/end 含义 | bbox |
 |---|---|---|
-| `collision_visible` | 是 / 否 / 不确定 | 碰撞过程首次可确认时刻 |
-| `person_down` | 是 / 否 / 不确定 | 行人/骑车人倒地时刻 |
-| `motor_vehicle_rollover` | 是 / 否 / 不确定 | 机动车侧翻时刻 |
-| `non_motor_rollover` | 是 / 否 / 不确定 | 非机动车侧翻时刻 |
-| `vehicle_fire` | 是 / 否 / 不确定 | 车辆着火/冒浓烟时刻 |
+| `collision_visible` | 是 / 否 / 不确定 | 碰撞过程时间窗 | 碰撞区域 |
+| `person_down` | 是 / 否 / 不确定 | 倒地时间窗 | 倒地目标 |
+| `motor_vehicle_rollover` | 是 / 否 / 不确定 | 侧翻时间窗 | 侧翻车辆 |
+| `non_motor_rollover` | 是 / 否 / 不确定 | 侧翻时间窗 | 侧翻目标 |
+| `vehicle_fire` | 是 / 否 / 不确定 | 着火时间窗 | 着火车辆 |
 
 ### 间接证据
 
 | 字段 | 取值形式 | 说明 |
 |---|---|---|
 | `collision_occluded` | 是 / 否 | 碰撞点被遮挡（与 `collision_visible.value=是` 互斥）；无时间戳 |
-| `abnormal_stop` | 时序对象 | 异常停止；timestamp=首次静止于异常位置 |
-| `bypass_behavior` | 时序对象 | 绕行；timestamp=首辆开始绕行 |
+| `abnormal_stop` | 时序+坐标对象 | 异常停止时间窗 + 停车车辆 bbox |
+| `bypass_behavior` | 时序+坐标对象 | 绕行时间窗 + 绕行区域 bbox |
 
 ### 误报判别
 
 | 字段 | 取值形式 | 说明 |
 |---|---|---|
-| `hazard_light` | 时序对象 | 双闪；timestamp=首次确认闪烁 |
+| `hazard_light` | 时序+坐标对象 | 双闪时间窗 + 车辆 bbox |
 | `hazard_light_reason` | 事故后 / 拥堵缓行 / 临时停车 / 故障施工 / 无双闪 / 不明确 | 双闪原因（无时间戳） |
 | `congestion_only` | 是 / 否 | 仅拥堵、无碰撞证据 |
-| `smooth_pullover` | 时序对象 | 平稳靠边；timestamp=开始靠边减速 |
-| `near_miss` | 时序对象 | 险情未碰；timestamp=最险瞬间 |
+| `smooth_pullover` | 时序+坐标对象 | 靠边时间窗 + 车辆 bbox |
+| `near_miss` | 时序+坐标对象 | 最险时间窗 + 近接区域 bbox |
 
 ---
 
@@ -135,7 +137,7 @@
 |---|---|---|
 | `event_start_sec` | float | 事件开始（碰撞或首个异常行为；负样本填 0） |
 | `event_end_sec` | float | 事件结束（状态稳定；负样本填视频时长） |
-| `accident_area_box` | [x,y,w,h] 或 null | 事故区域外接框；负样本 null |
+| `accident_area_box` | `[x,y,w,h]` 或 null | 事故区域坐标（与 bbox 同格式）；负样本 null |
 | `accident_area_location` | 行车道内 / 路口中央 / 应急车道 / 路边 / 匝道 / 隧道行车道 / 画面边缘 / 不适用 | 事故区域位置 |
 
 ---
@@ -189,7 +191,8 @@
 
 ```text
 ① 本规范字段集合必须齐全；
-② 时序属性 value=是 时 timestamp_sec 必填且落在 [0, duration_sec]；
+② 时序属性 value=是 时 start_sec/end_sec 必填且 0≤start≤end≤duration；
+   位置相关 value=是 时 bbox 必填；
 ③ collision_visible.value=是 与 collision_occluded=是 互斥；
 ④ accident=是 时准入成立，且 event 四字段有效；
 ⑤ event_start_sec ≤ event_end_sec。
@@ -213,27 +216,110 @@
   },
   "traffic": {
     "traffic_flow": "某点中断",
-    "flow_interruption_point": "是"
+    "flow_interruption_point": {
+      "value": "是",
+      "bbox": [
+        750,
+        300,
+        500,
+        360
+      ]
+    }
   },
   "evidence": {
-    "collision_visible": {"value": "是", "timestamp_sec": 6.5},
-    "person_down": {"value": "否", "timestamp_sec": null},
-    "motor_vehicle_rollover": {"value": "否", "timestamp_sec": null},
-    "non_motor_rollover": {"value": "否", "timestamp_sec": null},
-    "vehicle_fire": {"value": "否", "timestamp_sec": null},
+    "collision_visible": {
+      "value": "是",
+      "start_sec": 6.5,
+      "end_sec": 6.8,
+      "bbox": [
+        780,
+        360,
+        280,
+        220
+      ]
+    },
+    "person_down": {
+      "value": "否",
+      "start_sec": null,
+      "end_sec": null,
+      "bbox": null
+    },
+    "motor_vehicle_rollover": {
+      "value": "否",
+      "start_sec": null,
+      "end_sec": null,
+      "bbox": null
+    },
+    "non_motor_rollover": {
+      "value": "否",
+      "start_sec": null,
+      "end_sec": null,
+      "bbox": null
+    },
+    "vehicle_fire": {
+      "value": "否",
+      "start_sec": null,
+      "end_sec": null,
+      "bbox": null
+    },
     "collision_occluded": "否",
-    "abnormal_stop": {"value": "是", "timestamp_sec": 7.2},
-    "bypass_behavior": {"value": "是", "timestamp_sec": 8.0},
-    "hazard_light": {"value": "是", "timestamp_sec": 7.5},
+    "abnormal_stop": {
+      "value": "是",
+      "start_sec": 7.2,
+      "end_sec": 14.0,
+      "bbox": [
+        800,
+        340,
+        420,
+        300
+      ]
+    },
+    "bypass_behavior": {
+      "value": "是",
+      "start_sec": 8.0,
+      "end_sec": 14.0,
+      "bbox": [
+        700,
+        280,
+        600,
+        400
+      ]
+    },
+    "hazard_light": {
+      "value": "是",
+      "start_sec": 7.5,
+      "end_sec": 14.0,
+      "bbox": [
+        820,
+        340,
+        420,
+        300
+      ]
+    },
     "hazard_light_reason": "事故后",
     "congestion_only": "否",
-    "smooth_pullover": {"value": "否", "timestamp_sec": null},
-    "near_miss": {"value": "否", "timestamp_sec": null}
+    "smooth_pullover": {
+      "value": "否",
+      "start_sec": null,
+      "end_sec": null,
+      "bbox": null
+    },
+    "near_miss": {
+      "value": "否",
+      "start_sec": null,
+      "end_sec": null,
+      "bbox": null
+    }
   },
   "event": {
     "event_start_sec": 6.5,
     "event_end_sec": 14.0,
-    "accident_area_box": [760, 320, 520, 340],
+    "accident_area_box": [
+      760,
+      320,
+      520,
+      340
+    ],
     "accident_area_location": "行车道内"
   },
   "label": {
@@ -262,22 +348,80 @@
   },
   "traffic": {
     "traffic_flow": "拥堵",
-    "flow_interruption_point": "否"
+    "flow_interruption_point": {
+      "value": "否",
+      "bbox": null
+    }
   },
   "evidence": {
-    "collision_visible": {"value": "否", "timestamp_sec": null},
-    "person_down": {"value": "否", "timestamp_sec": null},
-    "motor_vehicle_rollover": {"value": "否", "timestamp_sec": null},
-    "non_motor_rollover": {"value": "否", "timestamp_sec": null},
-    "vehicle_fire": {"value": "否", "timestamp_sec": null},
+    "collision_visible": {
+      "value": "否",
+      "start_sec": null,
+      "end_sec": null,
+      "bbox": null
+    },
+    "person_down": {
+      "value": "否",
+      "start_sec": null,
+      "end_sec": null,
+      "bbox": null
+    },
+    "motor_vehicle_rollover": {
+      "value": "否",
+      "start_sec": null,
+      "end_sec": null,
+      "bbox": null
+    },
+    "non_motor_rollover": {
+      "value": "否",
+      "start_sec": null,
+      "end_sec": null,
+      "bbox": null
+    },
+    "vehicle_fire": {
+      "value": "否",
+      "start_sec": null,
+      "end_sec": null,
+      "bbox": null
+    },
     "collision_occluded": "否",
-    "abnormal_stop": {"value": "否", "timestamp_sec": null},
-    "bypass_behavior": {"value": "否", "timestamp_sec": null},
-    "hazard_light": {"value": "是", "timestamp_sec": 3.0},
+    "abnormal_stop": {
+      "value": "否",
+      "start_sec": null,
+      "end_sec": null,
+      "bbox": null
+    },
+    "bypass_behavior": {
+      "value": "否",
+      "start_sec": null,
+      "end_sec": null,
+      "bbox": null
+    },
+    "hazard_light": {
+      "value": "是",
+      "start_sec": 3.0,
+      "end_sec": 20.0,
+      "bbox": [
+        820,
+        340,
+        420,
+        300
+      ]
+    },
     "hazard_light_reason": "拥堵缓行",
     "congestion_only": "是",
-    "smooth_pullover": {"value": "否", "timestamp_sec": null},
-    "near_miss": {"value": "否", "timestamp_sec": null}
+    "smooth_pullover": {
+      "value": "否",
+      "start_sec": null,
+      "end_sec": null,
+      "bbox": null
+    },
+    "near_miss": {
+      "value": "否",
+      "start_sec": null,
+      "end_sec": null,
+      "bbox": null
+    }
   },
   "event": {
     "event_start_sec": 0.0,

@@ -1,0 +1,120 @@
+// ============================================================
+// 交通事故图片标注示例（带注释演示）
+// 对应规范：accident_annotation_spec_image.md（v3）
+// 说明：JSONC 格式；图片无 start_sec/end_sec，位置相关字段用 bbox。
+// bbox = [x, y, w, h]（图片左上角像素坐标系）
+// ============================================================
+{
+  "meta": {
+    "media_type": "image",              // 媒体类型：image
+    "image_path": "/data/images/ix_00789.jpg", // 图片路径
+    "image_source": "video_frame",       // independent / video_frame
+    "source_video_path": "/data/videos/ix_00789.mp4", // 来源视频（抽帧时）
+    "frame_time_sec": 8.2,                 // 抽帧时刻（秒）
+    "scene": "城市路口",                    // 场景
+    "camera_view": "高点俯视",
+    "annotator_id": "A11"
+  },
+  "env": {"p1": {"lighting": "白天", "visibility": "高"}, "p2": {"weather": "晴", "road_surface": "干燥", "glare_or_reflection": "否"}},
+  "traffic": {
+    "p0": {
+      "traffic_density": "中等",       // 静态密度
+      "flow_gap_pattern": {               // 断层形态（位置相关）
+        "value": "否",
+        "bbox": null
+      }
+    },
+    "p1": {"queue_formation": "否", "pedestrian_gathering": "是", "brake_lights_chain": "不可见"}
+  },
+  "scene_elements": {
+    "城市路口": {"p1": {"stop_position": {"value": "行车道", "bbox": [800, 340, 420, 300]}, "queue_at_signal": "否", "vru_involved": "非机动车"}, "p2": {"intersection_blocked": "否", "signal_state": "绿", "crosswalk_area": "是", "delivery_rider_involved": "是", "truck_involved": "否", "construction_zone": "否"}},  // 仅当前场景有字段；内部位置字段含 bbox
+    "高速高架": { "p1": {}, "p2": {} },
+    "城市普通路段": { "p1": {}, "p2": {} },
+    "隧道": { "p1": {}, "p2": {} },
+    "匝道收费站": { "p1": {}, "p2": {} },
+    "其他": { "p1": {}, "p2": {} }
+  },
+  "evidence": {
+    "p0": {
+      "collision_contact_visible": {      // 接触/贴合状态
+        "value": "否",
+        "bbox": null
+      },
+      "person_down": {                    // 倒地
+        "value": "是",
+        "bbox": [560, 450, 180, 160]   // 倒地目标坐标
+      },
+      "motor_vehicle_rollover": {
+        "value": "否",
+        "bbox": null
+      },
+      "non_motor_rollover": {
+        "value": "是",
+        "bbox": [560, 450, 180, 160]
+      },
+      "vehicle_fire": {
+        "value": "否",
+        "bbox": null
+      },
+      "vehicle_deformation": {
+        "value": "不确定",
+        "bbox": [780, 380, 300, 240]
+      },
+      "abnormal_stop_posture": {
+        "value": "是",
+        "bbox": [560, 450, 200, 180]
+      },
+      "collision_area_occluded": "否",
+      "lane_avoidance_pattern": {
+        "value": "不确定",
+        "bbox": [480, 300, 500, 350]
+      },
+      "rear_lights_on_both_sides": {
+        "value": "不可见",
+        "bbox": null
+      },
+      "congestion_only_suspected": "否",
+      "normal_parking_posture": {
+        "value": "否",
+        "bbox": null
+      }
+    },
+    "p1": {
+      "debris_scatter": {
+        "value": "否",
+        "bbox": null
+      },
+      "occlusion_type": "无遮挡",
+      "people_gathered_around": {
+        "value": "是",
+        "bbox": [540, 400, 300, 250]
+      },
+      "fluid_on_road": {
+        "value": "否",
+        "bbox": null
+      },
+      "close_distance_pair": {
+        "value": "否",
+        "bbox": null
+      }
+    }
+  },
+  "event": {
+    "p0": {
+      "accident_area_box": [540, 410, 380, 260], // 事故区域坐标
+      "accident_area_location": "路口中央"
+    },
+    "p1": {
+      "participants": [{"type": "电动车", "state_now": "侧翻", "rear_lights_on": "不可见", "roi_box": [560, 450, 180, 160]}, {"type": "轿车", "state_now": "姿态歪斜", "rear_lights_on": "否", "roi_box": [640, 400, 260, 200]}],  // 含 roi_box
+      "area_occluded_ratio": "无遮挡"
+    }
+  },
+  "label": {
+    "p0": {
+      "accident": "是",
+      "accident_type": "撞行人非机动车",
+      "confidence": "高"
+    }
+  },
+  "derived": {"hard": false, "congestion_suspected": "否"}
+}

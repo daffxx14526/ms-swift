@@ -1,0 +1,85 @@
+// 视频核心字段标注示例（对应 accident_annotation_spec_video_core.md）
+// 无 p0/p1/p2 分组键；时序用 start_sec/end_sec；位置用 bbox
+{
+  "meta": {"media_type": "video", "video_path": "/data/videos/hw_00123.mp4", "duration_sec": 20.0, "scene": "高速高架", "camera_view": "路侧固定", "annotator_id": "A03"},
+  "traffic": {
+    "traffic_flow": "某点中断", // 交通流
+    "flow_interruption_point": { // 中断点 + 坐标
+      "value": "是",
+      "bbox": [750, 300, 500, 360]
+    }
+  },
+  "evidence": {
+    "collision_visible": { // 碰撞可见：时间窗 + 区域坐标
+      "value": "是",
+      "start_sec": 6.5,
+      "end_sec": 6.8,
+      "bbox": [780, 360, 280, 220]
+    },
+    "person_down": {
+      "value": "否",
+      "start_sec": null,
+      "end_sec": null,
+      "bbox": null
+    },
+    "motor_vehicle_rollover": {
+      "value": "否",
+      "start_sec": null,
+      "end_sec": null,
+      "bbox": null
+    },
+    "non_motor_rollover": {
+      "value": "否",
+      "start_sec": null,
+      "end_sec": null,
+      "bbox": null
+    },
+    "vehicle_fire": {
+      "value": "否",
+      "start_sec": null,
+      "end_sec": null,
+      "bbox": null
+    },
+    "abnormal_stop": {
+      "value": "是",
+      "start_sec": 7.2,
+      "end_sec": 14.0,
+      "bbox": [800, 340, 420, 300]
+    },
+    "bypass_behavior": {
+      "value": "是",
+      "start_sec": 8.0,
+      "end_sec": 14.0,
+      "bbox": [700, 280, 600, 400]
+    },
+    "hazard_light": {
+      "value": "是",
+      "start_sec": 7.5,
+      "end_sec": 14.0,
+      "bbox": [820, 340, 420, 300]
+    },
+    "smooth_pullover": {
+      "value": "否",
+      "start_sec": null,
+      "end_sec": null,
+      "bbox": null
+    },
+    "near_miss": {
+      "value": "否",
+      "start_sec": null,
+      "end_sec": null,
+      "bbox": null
+    },
+    "collision_occluded": "否", // 状态字段，无时间窗
+    "hazard_light_reason": "事故后",
+    "congestion_only": "否"
+  },
+  "event": {
+    "event_start_sec": 6.5, // 事件开始
+    "event_end_sec": 14.0,   // 事件结束
+    "accident_area_box": [760, 320, 520, 340], // 事故区域坐标
+    "accident_area_location": "行车道内"
+  },
+  "label": {"accident": "是", "accident_type": "追尾", "confidence": "高"},
+  "derived": {"congestion": "是", "hard": false}
+}
