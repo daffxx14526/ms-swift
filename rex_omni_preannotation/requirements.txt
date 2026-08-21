@@ -1,0 +1,7 @@
+# 本工具库自身依赖（Rex-Omni 官方包及其 torch 依赖请按 README 第 1 节单独安装）
+pillow>=10.0
+numpy>=1.24
+opencv-python>=4.8
+tqdm>=4.66
+huggingface_hub>=0.23
+modelscope>=1.15

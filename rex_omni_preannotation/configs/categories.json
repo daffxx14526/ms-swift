@@ -1,0 +1,31 @@
+{
+  "targets": [
+    {"prompt": "car", "label_cn": "机动车"},
+    {"prompt": "truck", "label_cn": "机动车"},
+    {"prompt": "bus", "label_cn": "机动车"},
+    {"prompt": "van", "label_cn": "机动车"},
+    {"prompt": "motorcycle", "label_cn": "非机动车"},
+    {"prompt": "bicycle", "label_cn": "非机动车"},
+    {"prompt": "electric scooter", "label_cn": "非机动车"},
+    {"prompt": "tricycle", "label_cn": "非机动车"},
+    {"prompt": "pedestrian", "label_cn": "行人"},
+    {"prompt": "traffic light", "label_cn": "信号灯"}
+  ],
+  "evidence": [
+    {"prompt": "overturned vehicle", "label_cn": "侧翻车辆", "phenomenon": "侧翻"},
+    {"prompt": "vehicle on its side", "label_cn": "侧翻车辆", "phenomenon": "侧翻"},
+    {"prompt": "fire", "label_cn": "火焰", "phenomenon": "起火"},
+    {"prompt": "smoke", "label_cn": "烟雾", "phenomenon": "冒烟"},
+    {"prompt": "scattered cargo on road", "label_cn": "散落物", "phenomenon": "散落物"},
+    {"prompt": "debris on road", "label_cn": "碎片", "phenomenon": "散落物"},
+    {"prompt": "person lying on the road", "label_cn": "人员倒地", "phenomenon": "人员倒地"},
+    {"prompt": "traffic cone", "label_cn": "锥桶", "phenomenon": "施工或故障提示"},
+    {"prompt": "warning triangle", "label_cn": "三角警示牌", "phenomenon": "施工或故障提示"}
+  ],
+  "vehicle_labels_cn": ["机动车"],
+  "thresholds": {
+    "congestion_vehicle_count": 8,
+    "static_track_min_duration_sec": 10.0,
+    "static_center_shift_ratio": 0.3
+  }
+}
