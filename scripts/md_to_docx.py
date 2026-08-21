@@ -183,8 +183,11 @@ def main():
     files = [
         "accident_annotation_spec_video.md",
         "accident_annotation_spec_image.md",
+        "accident_annotation_spec_video_core.md",
+        "accident_annotation_spec_image_core.md",
         "accident_annotation_criteria.md",
         "accident_detection_training_plan.md",
+        "accident_model_pipeline_design.md",
     ]
     out_dir = root / "docs_word"
     for name in files:
