@@ -10,30 +10,30 @@
 
 ---
 
-## 1. 环境安装
+## 1. 环境安装（官方库已内置，一键部署）
+
+Rex-Omni 官方库核心部分已 vendor 在本目录 `Rex-Omni/` 下（上游 commit `6508981`，
+详见 `Rex-Omni/VENDORED.md`），**无需再自行 git clone**。
 
 ```bash
 # 1) 创建环境（Rex-Omni 官方要求 python 3.10）
 conda create -n rexomni python=3.10 -y
 conda activate rexomni
 
-# 2) 安装 PyTorch（按你的 CUDA 版本选择，官方示例为 cu128）
-pip install torch==2.7.0 torchvision --index-url https://download.pytorch.org/whl/cu128
-
-# 3) 安装 Rex-Omni 官方包（源码安装）
-git clone https://github.com/IDEA-Research/Rex-Omni.git
-cd Rex-Omni
-pip install -r requirements.txt
-pip install -v -e .
-cd ..
-
-# 4) 安装本工具库依赖
+# 2) 一键部署（安装 PyTorch + Rex-Omni 官方包 + 本工具库依赖，并自动验证导入）
 cd rex_omni_preannotation
-pip install -r requirements.txt
-
-# 5)（可选，强烈推荐用于批量预标注提速）安装 vLLM
-pip install vllm
+bash scripts/setup_env.sh
 ```
+
+`setup_env.sh` 可选开关：
+
+| 变量 | 说明 |
+|---|---|
+| `TORCH_INDEX_URL=...` | 覆盖 PyTorch wheel 源（默认 cu128；CPU 验证机用 `https://download.pytorch.org/whl/cpu`） |
+| `WITH_FLASH_ATTN=1` | 追加编译安装 flash-attn（GPU 推理提速；未装时运行脚本请加 `--attn-impl sdpa`） |
+| `WITH_VLLM=1` | 追加安装 vLLM（批量预标注吞吐提升数倍，推荐） |
+
+示例：`WITH_VLLM=1 bash scripts/setup_env.sh`
 
 ## 2. 下载模型到本地
 
@@ -76,6 +76,7 @@ python scripts/preannotate_images.py \
 | `--vis` | 额外输出画框可视化图（`output/images/vis/`） |
 | `--labelstudio` | 额外输出 Label Studio 预标注导入文件 `labelstudio_tasks.json` |
 | `--quantization` | AWQ 量化版填 `awq`（须配合 `--backend vllm`） |
+| `--attn-impl` | transformers 后端注意力实现；**未安装 flash-attn 时填 `sdpa`** |
 
 **输出**（每张图一个 JSON，`output/images/json/<图名>.json`）：
 
@@ -157,6 +158,13 @@ Rex-Omni 不输出置信度分数，分档基于**证据命中与目标密度**�
 rex_omni_preannotation/
 ├── README.md
 ├── requirements.txt
+├── Rex-Omni/                    # ★ vendored 官方库核心（无需自行 clone）
+│   ├── rex_omni/                #   官方 Python 包（wrapper/tasks/parser/utils）
+│   ├── setup.py                 #   pip install -e 安装配置
+│   ├── requirements.txt         #   官方完整依赖（安装请走 setup_env.sh）
+│   ├── app.py                   #   官方 Gradio 交互 demo
+│   ├── LICENSE                  #   IDEA License 1.0
+│   └── VENDORED.md              #   vendor 说明（上游 commit、裁剪内容）
 ├── configs/
 │   └── categories.json          # 英文提示词 → 中文类别映射（目标类 + 证据类）
 ├── rex_preannotate/
@@ -165,9 +173,16 @@ rex_omni_preannotation/
 │   ├── tracker.py               # 轻量 IoU 贪心跟踪器（视频轨迹关联，零训练）
 │   └── utils.py                 # bbox 转换、类别映射、复核分档、Label Studio 导出
 └── scripts/
+    ├── setup_env.sh             # ★ 一键部署（torch + Rex-Omni + 依赖 + 导入验证）
     ├── download_model.py        # HF / ModelScope 模型下载
     ├── preannotate_images.py    # 图片批量预标注
     └── preannotate_video.py     # 视频预标注（抽帧+跟踪+时间窗）
+```
+
+**Gradio 交互 demo**（部署完成、模型下载后可用，便于人工抽查零样本效果）：
+
+```bash
+python Rex-Omni/app.py --model_path ./models/Rex-Omni --server_name 0.0.0.0 --server_port 7890
 ```
 
 ## 7. 常见问题

@@ -57,6 +57,8 @@ def main():
         Path(__file__).resolve().parent.parent / 'configs' / 'categories.json'))
     parser.add_argument('--backend', choices=['transformers', 'vllm'], default='transformers')
     parser.add_argument('--quantization', default=None, help="AWQ 量化版填 'awq'（需 vllm 后端）")
+    parser.add_argument('--attn-impl', default=None,
+                        help="transformers 后端注意力实现；未安装 flash-attn 时填 'sdpa'")
     parser.add_argument('--batch-size', type=int, default=8)
     parser.add_argument('--vis', action='store_true', help='输出画框可视化图')
     parser.add_argument('--labelstudio', action='store_true',
@@ -75,11 +77,15 @@ def main():
     print(f'共 {len(images)} 张图片待预标注')
 
     cat_map = CategoryMap(args.categories)
+    engine_kwargs = {}
+    if args.attn_impl:
+        engine_kwargs['attn_implementation'] = args.attn_impl
     engine = RexPreannotator(
         model_path=args.model_path,
         cat_map=cat_map,
         backend=args.backend,
         quantization=args.quantization,
+        **engine_kwargs,
     )
 
     ls_tasks = []
