@@ -1,0 +1,259 @@
+// ============================================================
+// 交通事故视频标注示例（带注释演示）
+// 对应规范：accident_annotation_spec_video.md（v6）
+// 说明：本文件为 JSONC（允许 // 注释），便于阅读；入库前需去掉注释。
+// 时间窗：start_sec / end_sec（秒，相对视频起点，精度 0.1s）
+// 坐标：bbox = [x, y, w, h]（画面左上角像素坐标系）
+// ============================================================
+{
+  // ---------- 元信息（工具自动填 + 人工确认 scene） ----------
+  "meta": {
+    "media_type": "video",              // 媒体类型：video
+    "video_path": "/data/videos/hw_00123.mp4", // 视频路径
+    "duration_sec": 20.0,                 // 视频总时长（秒）
+    "scene": "高速高架",                    // 场景类别（决定 scene_elements 填充哪个键）
+    "camera_view": "路侧固定",            // 摄像头视角
+    "annotator_id": "A03"                  // 标注员编号
+  },
+
+  // ---------- 环境（辅助分桶，非事故判定核心） ----------
+  "env": {
+    "p1": {
+      "lighting": "白天",          // 光照条件
+      "visibility": "中"           // 能见度
+    },
+    "p2": {
+      "weather": "雨",              // 天气
+      "road_surface": "湿滑",      // 路面
+      "glare_or_reflection": "否" // 是否眩光/反光
+    }
+  },
+
+  // ---------- 交通流（核心） ----------
+  "traffic": {
+    "p0": {
+      "traffic_flow": "某点中断", // 五级交通流；"某点中断"为强事故信号
+      "flow_interruption_point": {          // 是否存在固定中断点（位置相关）
+        "value": "是",
+        "bbox": [750, 300, 500, 360] // 中断点区域 [x,y,w,h]
+      }
+    },
+    "p1": {
+      "queue_present": "是",           // 是否排队
+      "pedestrian_gathering": "否"  // 是否有人在车行道聚集
+    }
+  },
+
+  // ---------- 场景要素：按场景分对象，仅填充 meta.scene 对应键 ----------
+  "scene_elements": {
+    "高速高架": {
+      "p1": {
+        "stop_position": {                 // 停车位置类别 + 车辆坐标
+          "value": "行车道",
+          "bbox": [800, 340, 420, 300]
+        },
+        "emergency_lane_occupied": {
+          "value": "否",
+          "bbox": null
+        },
+        "stop_in_lane": {
+          "value": "是",
+          "bbox": [800, 340, 420, 300]
+        },
+        "hazard_light_chain": {            // 双闪链（时序+位置）
+          "value": "否",
+          "start_sec": null,                 // 现象开始（秒）
+          "end_sec": null,                   // 现象结束（秒）
+          "bbox": null                     // 涉及区域
+        },
+        "sudden_brake_wave": {             // 急刹波
+          "value": "是",
+          "start_sec": 5.8,
+          "end_sec": 7.3,
+          "bbox": [600, 200, 700, 350]
+        },
+        "rear_end_chain": {                // 追尾链
+          "value": "是",
+          "start_sec": 6.5,
+          "end_sec": 7.5,
+          "bbox": [760, 320, 520, 340]
+        },
+        "guardrail_impact": {
+          "value": "否",
+          "start_sec": null,
+          "end_sec": null,
+          "bbox": null
+        },
+        "debris_on_road": {
+          "value": "是",
+          "start_sec": 6.8,
+          "end_sec": 7.3,
+          "bbox": [760, 480, 160, 80]
+        }
+      },
+      "p2": {"merge_conflict": {"value": "否", "start_sec": null, "end_sec": null, "bbox": null}, "reverse_or_retrograde": {"value": "否", "start_sec": null, "end_sec": null, "bbox": null}, "truck_involved": "是", "construction_zone": "否"}  // 次要场景字段（含时序/坐标对象）
+    },
+    // 非当前场景：保持空的 p1/p2
+    "城市路口": { "p1": {}, "p2": {} },
+    "城市普通路段": { "p1": {}, "p2": {} },
+    "隧道": { "p1": {}, "p2": {} },
+    "匝道收费站": { "p1": {}, "p2": {} },
+    "其他": { "p1": {}, "p2": {} }
+  },
+
+  // ---------- 证据链（核心；时序字段用 start/end，位置字段带 bbox） ----------
+  "evidence": {
+    "p0": {
+      "collision_visible": {              // 碰撞过程是否可见
+        "value": "是",
+        "start_sec": 6.5,                   // 碰撞开始
+        "end_sec": 6.8,                     // 碰撞结束
+        "bbox": [780, 360, 280, 220]     // 碰撞区域坐标
+      },
+      "person_down": {
+        "value": "否",
+        "start_sec": null,
+        "end_sec": null,
+        "bbox": null
+      },
+      "motor_vehicle_rollover": {
+        "value": "否",
+        "start_sec": null,
+        "end_sec": null,
+        "bbox": null
+      },
+      "non_motor_rollover": {
+        "value": "否",
+        "start_sec": null,
+        "end_sec": null,
+        "bbox": null
+      },
+      "vehicle_fire": {
+        "value": "否",
+        "start_sec": null,
+        "end_sec": null,
+        "bbox": null
+      },
+      "collision_occluded": "否",          // 碰撞点是否被遮挡（状态，无时间窗）
+      "abnormal_stop": {                  // 异常停车
+        "value": "是",
+        "start_sec": 7.2,
+        "end_sec": 14.0,
+        "bbox": [800, 340, 420, 300]
+      },
+      "bypass_behavior": {                // 绕行
+        "value": "是",
+        "start_sec": 8.0,
+        "end_sec": 14.0,
+        "bbox": [700, 280, 600, 400]
+      },
+      "hazard_light": {                   // 双闪
+        "value": "是",
+        "start_sec": 7.5,
+        "end_sec": 14.0,
+        "bbox": [820, 340, 420, 300]
+      },
+      "hazard_light_reason": "事故后",      // 双闪原因（结论类）
+      "congestion_only": "否",            // 是否仅拥堵无事故证据
+      "smooth_pullover": {
+        "value": "否",
+        "start_sec": null,
+        "end_sec": null,
+        "bbox": null
+      },
+      "near_miss": {
+        "value": "否",
+        "start_sec": null,
+        "end_sec": null,
+        "bbox": null
+      }
+    },
+    "p1": {
+      "vehicle_deformation": {            // 车损（状态+坐标）
+        "value": "是",
+        "bbox": [780, 380, 300, 240]
+      },
+      "debris_scatter": {
+        "value": "是",
+        "start_sec": 6.8,
+        "end_sec": 7.3,
+        "bbox": [760, 480, 160, 80]
+      },
+      "occlusion_type": "无遮挡",          // 遮挡类型（无坐标）
+      "abrupt_trajectory_change": {
+        "value": "是",
+        "start_sec": 6.5,
+        "end_sec": 7.0,
+        "bbox": [780, 380, 300, 240]
+      },
+      "posture_anomaly": {
+        "value": "是",
+        "bbox": [780, 380, 300, 240]
+      },
+      "people_exit_vehicle": {
+        "value": "否",
+        "start_sec": null,
+        "end_sec": null,
+        "bbox": null
+      },
+      "close_distance_pass": {
+        "value": "否",
+        "start_sec": null,
+        "end_sec": null,
+        "bbox": null
+      }
+    }
+  },
+
+  // ---------- 事件时间窗 / 事故区域 / 参与者 ----------
+  "event": {
+    "p0": {
+      "event_start_sec": 6.5,                 // 事件开始（碰撞或首个异常）
+      "event_end_sec": 14.0,                  // 事件结束（状态稳定）
+      "accident_area_box": [760, 320, 520, 340], // 事故区域外接框
+      "accident_area_location": "行车道内"     // 事故区域道路位置类别
+    },
+    "p1": {
+      "collision_moment_visible": "是", // 碰撞瞬间是否可见
+      "collision_moment_start_sec": None,      // 碰撞接触开始
+      "collision_moment_end_sec": None,        // 碰撞接触结束
+      "pre_event_visible": "是",
+      "post_event_visible": "是",
+      "participants": [                   // 参与者列表；roi_box 为单目标坐标
+        {
+          "type": "货车",                 // 目标类型
+          "role": "被动方",               // 角色（非责任认定）
+          "behavior_before": "急刹",     // 事前行为
+          "state_after": "停止行车道",     // 事后状态
+          "hazard_light_after": "是",
+          "roi_box": [820, 340, 420, 300]     // 该参与者外接框
+        },
+        {
+          "type": "轿车",                 // 目标类型
+          "role": "主动方",               // 角色（非责任认定）
+          "behavior_before": "正常行驶",     // 事前行为
+          "state_after": "姿态歪斜",     // 事后状态
+          "hazard_light_after": "不可见",
+          "roi_box": [780, 380, 300, 240]     // 该参与者外接框
+        }
+      ]
+    },
+    "p2": { "area_occluded_ratio": "无遮挡" } // 事故区域遮挡程度
+  },
+
+  // ---------- 最终标签 ----------
+  "label": {
+    "p0": {
+      "accident": "是",                 // 是否事故
+      "accident_type": "追尾",            // 事故类型
+      "confidence": "高"               // 标注信心
+    }
+  },
+
+  // ---------- 派生字段（脚本自动计算，人工不填） ----------
+  "derived": {
+    "congestion": "是",
+    "hard": false,
+    "event_stage_coverage": "全过程"
+  }
+}

@@ -1,0 +1,8 @@
+# 本工具库自身依赖（版本与 Rex-Omni 官方锁定保持一致，避免冲突）
+# PyTorch 与 Rex-Omni 官方包请用 scripts/setup_env.sh 安装
+numpy==1.26.4
+pillow==10.4.0
+opencv-python==4.10.0.84
+tqdm>=4.66
+huggingface_hub>=0.23
+modelscope>=1.15
