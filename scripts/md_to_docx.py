@@ -189,6 +189,7 @@ def main():
         "accident_detection_training_plan.md",
         "accident_model_pipeline_design.md",
         "zero_shot_preannotation_plan.md",
+        "accident_sft_grpo_two_stage_training.md",
     ]
     out_dir = root / "docs_word"
     for name in files:

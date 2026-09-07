@@ -422,6 +422,9 @@ python swift/cli/sft.py \
 
 ### 5.3 可选进阶：GRPO 强化
 
+> 完整的 SFT → GRPO 两阶段设计（数据筛选、多任务奖励路由、证据一致性奖励、非对称代价、
+> 训练监控与部署蒸馏）见 `accident_sft_grpo_two_stage_training.md`，本节只保留概要。
+
 前提：SFT 后模型已能按"分析 → 结论"格式输出，且困难样本答对率在 30~80% 区间。
 
 **奖励设计**：
@@ -465,7 +468,7 @@ GRPO 数据要求：
 ```python
 import re
 from typing import List
-from swift.plugin import ORM, orms
+from swift.rewards import ORM, orms  # 新版 ms-swift 路径；旧版为 swift.plugin
 
 
 class AccidentAccuracyReward(ORM):
